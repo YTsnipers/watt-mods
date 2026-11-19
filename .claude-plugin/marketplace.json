@@ -1,0 +1,12 @@
+{
+  "name": "my-mods",
+  "owner": { "name": "apollon" },
+  "metadata": { "description": "Personal Claude Code mods" },
+  "plugins": [
+    {
+      "name": "turn-clock",
+      "source": "./plugins/turn-clock",
+      "description": "Per-tool-call duration and per-turn tool count, model time, tool time"
+    }
+  ]
+}
