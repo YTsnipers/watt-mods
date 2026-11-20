@@ -273,3 +273,14 @@ test('the settings window lists four choices and a press changes one', async ($,
   expect((await ui.find({ key: 'sounds' }))?.text).toMatch(/\[ \] Sounds/)
   await ui.unmount()
 })
+
+test('a chip shows its model while the name is cut to make room, and drops it only when it is too narrow', () => {
+  const at = (width: number): string =>
+    rasterText(
+      chipCells({ width, name: 'a long probe name', model: 'haiku 5.5', time: '12s', state: 'running', ratio: 0, frame: 0, now: 1_000_000, isTwinkling: false }),
+    )
+
+  expect(at(28)).toMatch(/● a long\.\. +haiku 5\.5 +12s/)
+  expect(at(40)).toContain('haiku 5.5')
+  expect(at(16)).not.toContain('haiku')
+})

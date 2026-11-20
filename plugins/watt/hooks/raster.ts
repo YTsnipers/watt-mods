@@ -205,8 +205,11 @@ export const hexOf = (c: number[]): string => `#${c.map(v => v.toString(16).padS
 const cut = (s: string, width: number): string => {
   const text = cellText(s)
 
-  return text.length <= width ? text : width <= 2 ? text.slice(0, width) : `${text.slice(0, width - 2)}..`
+  return text.length <= width ? text : width <= 2 ? text.slice(0, width) : `${text.slice(0, width - 2).trimEnd()}..`
 }
+
+// The model needs the name to keep at least this many cells; narrower than that, the model goes.
+export const MIN_NAME = 5
 
 export type ChipArgs = {
   width: number
@@ -278,7 +281,7 @@ export function chipCells({ width: W, name, model, time, state, ratio, now, isTw
   const dimInk = pack(readable(bgs, mix(tint, fg, 0.6), mix(tint, fg, 0.8), fg))
   const timeAt = W - 1 - time.length
   const modelAt = timeAt - 2 - model.length
-  const hasModel = model !== '' && modelAt - 4 >= 10
+  const hasModel = model !== '' && modelAt - 4 >= MIN_NAME
   const room = Math.max(0, (hasModel ? modelAt : timeAt) - 4)
 
   g.text(3, 0, cut(name, room), ink)

@@ -20,7 +20,9 @@ const EMPTY = '#26233a'
 const GREEN = '#1f6a42'
 const RED = '#7a2e2e'
 const CLOSE = ' × '
-const MIN_CHIP = 18
+// A chip's least width: glyph, a short name, the model ("haiku 5.5"), the time and a close button. Without the model it
+// can be narrower.
+const minChip = (): number => (prefs.isModelShown ? 28 : 18)
 
 // Terminal cells a string takes: CJK letters take two.
 const cells = (text: string): number => [...text].reduce((n, c) => n + ((c.codePointAt(0) ?? 0) > 0x2e7f ? 2 : 1), 0)
@@ -290,9 +292,9 @@ export const register: Register = (on, options) => {
           cells={trackCells({ width: summaryW, head, label, isDone: isAllDone, now, isTwinkling: prefs.isTwinkling })}
         />
       )
-    // Chips are at least MIN_CHIP wide; past what fits, the rest fold into one "+N more" (unfinished ones first).
+    // Chips are at least minChip() wide; past what fits, the rest fold into one "+N more" (unfinished ones first).
     const total = row - summaryW - 1
-    const fits = (room: number): number => Math.max(1, Math.floor((room + 1) / (MIN_CHIP + 1)))
+    const fits = (room: number): number => Math.max(1, Math.floor((room + 1) / (minChip() + 1)))
     const moreW = chips.length > fits(total) ? `+${chips.length} more`.length + 1 : 0
     const shown = chips.slice(0, fits(total - moreW))
     const hidden = chips.length - shown.length
