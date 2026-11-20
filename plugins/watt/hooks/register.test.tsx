@@ -103,14 +103,14 @@ test('a finished agent turns green, stays, and has a close button', async ($, on
 
   const running = await $.ui.mount(AGENT_ROW('running') as never)
 
-  const chip = (await running.find({ type: 'Text', text: /sandbox probe/ }))?.text
+  const chip = rasterText(((await running.find({ key: 'chip-a1' }))?.props.cells ?? '') as string)
 
-  expect(chip).toMatch(/5s/)
+  expect(chip).toMatch(/● sandbox probe\s+5s/)
   const bar = await running.find({ type: 'Raster' })
 
   expect(rasterText(bar?.props.cells as string)).toBe('● 0/1 0%')
   // One chip takes at most half of the row (80 columns less 6 spare).
-  expect(chip?.length).toBeLessThanOrEqual(37)
+  expect(chip.length).toBeLessThanOrEqual(37)
   await running.unmount()
 
   status = 'completed'
@@ -125,7 +125,7 @@ test('a finished agent turns green, stays, and has a close button', async ($, on
   const done = await $.ui.mount(AGENT_ROW('completed') as never)
 
   expect(rasterText((await done.find({ type: 'Raster' }))?.props.cells as string)).toBe('✓ Done 1/1 100%')
-  expect((await done.find({ type: 'Text', text: /sandbox probe/ }))?.text).toMatch(/✓ sandbox probe\s+30s/)
+  expect(rasterText(((await done.find({ key: 'chip-a1' }))?.props.cells ?? '') as string)).toMatch(/✓ sandbox probe\s+30s/)
   expect(await done.find({ type: 'Text', text: /×/ })).toBeDefined()
   await done.unmount()
 

@@ -1,6 +1,6 @@
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
-import { trackCells } from './raster'
+import { chipCells, chipTint, hexOf, trackCells } from './raster'
 
 const live = (status: string): boolean => status === 'running' || status === 'waiting' || status === 'pending'
 
@@ -255,6 +255,47 @@ export const register: Register = (on, options) => {
         {summary}
         {chips.map((c, i) => {
           const gap = <Text> </Text>
+
+          // Raster chips, the plan-progress way. A Raster is not pressable, so a chip does not open its agent here.
+          if (Raster !== null) {
+            const state = c.endAt === undefined ? 'running' : c.isOk ? 'done' : 'failed'
+            const room = state === 'running' ? width : width - cells(CLOSE)
+
+            return (
+              <Box key={c.id}>
+                {gap}
+                <Raster
+                  key={`chip-${c.id}`}
+                  columns={room}
+                  rows={1}
+                  cells={chipCells({
+                    width: room,
+                    name: c.description,
+                    time: clock((c.endAt ?? now) - c.startTime),
+                    state,
+                    ratio: c.ratio,
+                    frame: frame + i,
+                    now,
+                    isTwinkling,
+                  })}
+                />
+                {state === 'running' ? null : (
+                  <Button
+                    plain
+                    key={`${c.id}:close`}
+                    onPress={() => {
+                      dismissed.add(c.id)
+                      finished.delete(c.id)
+                      seen.delete(c.id)
+                      void sync($)
+                    }}
+                  >
+                    <Text backgroundColor={hexOf(chipTint(state))}>{CLOSE}</Text>
+                  </Button>
+                )}
+              </Box>
+            )
+          }
 
           if (c.endAt === undefined) {
             // The fill follows the context window used: the purple part is what is spent, the dark part what is left.

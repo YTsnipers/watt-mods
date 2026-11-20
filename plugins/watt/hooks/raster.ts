@@ -163,3 +163,86 @@ export function trackCells({ width: W, head: fx, label, isDone, now, isTwinkling
 
   return g.encode()
 }
+
+const FAILED = [196, 84, 84]
+
+export const hexOf = (c: number[]): string => `#${c.map(v => v.toString(16).padStart(2, '0')).join('')}`
+
+// A Raster-cell text cut to `width` columns, ending in two dots when it was cut.
+const cut = (s: string, width: number): string => {
+  const text = cellText(s)
+
+  return text.length <= width ? text : width <= 2 ? text.slice(0, width) : `${text.slice(0, width - 2)}..`
+}
+
+export type ChipArgs = {
+  width: number
+  name: string
+  time: string
+  // `running` twinkles and fills by `ratio`; the others stand still in their colour.
+  state: 'running' | 'done' | 'failed'
+  // How much of its context window the agent has used, 0 to 1: the brighter part of a running chip.
+  ratio: number
+  frame: number
+  now: number
+  isTwinkling: boolean
+}
+
+// The tint a finished chip stands in, and what its close button takes as its own background.
+export const chipTint = (state: 'running' | 'done' | 'failed'): number[] =>
+  mix(BACK, state === 'done' ? FINISHED : state === 'failed' ? FAILED : RUNNING, state === 'running' ? 0.18 : 0.34)
+
+// One agent as a row of cells: a tinted pill, a status dot, the name, the time at the right. A running chip's
+// leading part (what it has spent of its context) is brighter and carries sparse dots that glow, as plan-progress's
+// agent strips do.
+export function chipCells({ width: W, name, time, state, ratio, frame, now, isTwinkling }: ChipArgs): string {
+  const g = new Grid(W, 1)
+  const isRunning = state === 'running'
+  const color = state === 'done' ? FINISHED : state === 'failed' ? FAILED : RUNNING
+  const tint = chipTint(state)
+  const spent = mix(BACK, color, 0.3)
+  const edge = isRunning && ratio > 0 ? Math.max(1, Math.round(W * ratio)) : 0
+
+  pill(g, 0, 0, W, x => (x < edge ? spent : tint))
+
+  if (isRunning) {
+    for (let col = 1; col < W - 1; col += 1) {
+      let bits = 0
+      let glow = 0
+
+      for (let r = 0; r < 4; r += 1) {
+        for (let c = 0; c < 2; c += 1) {
+          const sx = col * 2 + c + frame * 0
+
+          if (hash(sx, r, 5) >= 0.08) {
+            continue
+          }
+
+          bits |= BRAILLE_BITS[r]?.[c] ?? 0
+          glow = Math.max(glow, 1 - 0.55 * (isTwinkling ? wave(now, 1900 + hash(sx, r, 6) * 1400, hash(sx, r, 7)) : 0.5))
+        }
+      }
+
+      if (bits > 0) {
+        const bg = col < edge ? spent : tint
+
+        g.set(col, 0, 0x2800 + bits, pack(mix(bg, color, 0.2 + 0.4 * q(glow))), pack(bg))
+      }
+    }
+  }
+
+  const ink = pack([236, 234, 246])
+  const dim = pack(mix(tint, [236, 234, 246], 0.6))
+  const glyph = state === 'done' ? '✓' : state === 'failed' ? 'x' : '●'
+  const dot = isRunning ? mix(tint, color, 0.3 + 0.7 * q(wave(now, 1100))) : color
+
+  g.text(1, 0, glyph, pack(isRunning && isTwinkling ? dot : color), pack(tint))
+
+  const timeAt = W - 1 - time.length
+  const room = Math.max(0, timeAt - 4)
+
+  g.text(3, 0, cut(name, room), ink)
+  g.text(timeAt, 0, time, dim)
+
+  return g.encode()
+}
