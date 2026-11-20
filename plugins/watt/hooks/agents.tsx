@@ -19,6 +19,7 @@ const EMPTY = '#26233a'
 const GREEN = '#1f6a42'
 const RED = '#7a2e2e'
 const CLOSE = ' × '
+const MIN_CHIP = 18
 
 // Terminal cells a string takes: CJK letters take two.
 const cells = (text: string): number => [...text].reduce((n, c) => n + ((c.codePointAt(0) ?? 0) > 0x2e7f ? 2 : 1), 0)
@@ -69,8 +70,20 @@ const split = (text: string, n: number): [string, string] => {
   return [chars.slice(0, i).join(''), chars.slice(i).join('')]
 }
 
+// claude-haiku-5-5-20260101 -> haiku 5.5, claude-sonnet-4-20250514 -> sonnet 4 (a date is no minor version); an alias
+// stays as given. Adapted from plan-progress (MIT, Copyright (c) 2026 Kirill Serditov).
+const modelName = (m: string): string => {
+  const r = /^claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?!\d)/.exec(m)
+
+  return r ? `${r[1]} ${r[2]}${r[3] ? `.${r[3]}` : ''}` : m
+}
+
 type Chip = {
   id: string
+  // The model it runs on, as `$.agent.list()` names it; empty when none is known.
+  model: string
+  // True while it waits on someone (a decision), not while it works.
+  isWaiting: boolean
   // How much of its context window the agent has used, 0 to 1: the fill of a running chip.
   ratio: number
   description: string
@@ -93,6 +106,9 @@ let timer: Timer | undefined
 let keepMs = KEEP_MS
 let isTwinkling = true
 let isSoundOn = true
+let isModelShown = true
+// Agents that waited at the last sync: a decision sound plays for one that starts to.
+let waiting = new Set<string>()
 // How far the summary fill has got, in cells: it glides toward its target a frame at a time.
 let head = 0
 // Running agents at the last sync, and the ids already announced: a sound plays when the last one ends.
@@ -104,7 +120,15 @@ async function running($: EngineInterface): Promise<Chip[]> {
   for (const a of agents) {
     const ratio = a.contextWindowSize ? Math.min(1, a.tokenCount / a.contextWindowSize) : 0
 
-    seen.set(a.id, { id: a.id, ratio, description: a.description, startTime: a.startTime, isOk: true })
+    seen.set(a.id, {
+      id: a.id,
+      ratio,
+      model: a.model ?? '',
+      isWaiting: a.status === 'waiting',
+      description: a.description,
+      startTime: a.startTime,
+      isOk: true,
+    })
     // An agent that came back to work after a stop leaves the finished list.
     finished.delete(a.id)
   }
@@ -152,6 +176,15 @@ async function sync($: EngineInterface): Promise<void> {
 
   lastActive = active.length
 
+  // An agent that starts to wait on someone: the decision sound, once for each time it begins to.
+  const nowWaiting = new Set(active.filter(c => c.isWaiting).map(c => c.id))
+
+  if (isSoundOn && [...nowWaiting].some(id => !waiting.has(id))) {
+    void $.audio.play({ asset: 'sounds/decision.wav' }).catch(() => undefined)
+  }
+
+  waiting = nowWaiting
+
   if (active.length > 0 || finished.size > 0) {
     timer ??= $.clock.every(FRAME_MS, () => {
       void settle($).then(() => $.ui.invalidate('ui.render'))
@@ -170,6 +203,7 @@ export const register: Register = (on, options) => {
   keepMs = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : KEEP_MS
   isTwinkling = options?.twinkle !== false
   isSoundOn = options?.sounds !== false
+  isModelShown = options?.showModel !== false
 
   on('session.start', async ($, e, next) => {
     await loadThemeSetting($)
@@ -264,8 +298,13 @@ export const register: Register = (on, options) => {
           cells={trackCells({ width: summaryW, head, label, isDone: isAllDone, now, isTwinkling })}
         />
       )
+    // Chips are at least MIN_CHIP wide; past what fits, the rest fold into one "+N more" (unfinished ones first).
     const total = row - summaryW - 1
-    const share = Math.floor((total - (chips.length - 1)) / chips.length)
+    const fits = (room: number): number => Math.max(1, Math.floor((room + 1) / (MIN_CHIP + 1)))
+    const moreW = chips.length > fits(total) ? `+${chips.length} more`.length + 1 : 0
+    const shown = chips.slice(0, fits(total - moreW))
+    const hidden = chips.length - shown.length
+    const share = Math.floor((total - (hidden > 0 ? moreW : 0) - (shown.length - 1)) / shown.length)
     const width = Math.max(8, Math.min(Math.floor(row / 2), share))
 
     // Pass `isHidden: false` down the chain: a finished agent's row may arrive hidden.
@@ -274,13 +313,13 @@ export const register: Register = (on, options) => {
     return (
       <Box>
         {summary}
-        {chips.map((c, i) => {
+        {shown.map((c, i) => {
           const gap = <Text> </Text>
 
           // Raster chips, the plan-progress way. A Raster is not pressable, so a chip does not open its agent here.
           if (Raster !== null) {
-            const state = c.endAt === undefined ? 'running' : c.isOk ? 'done' : 'failed'
-            const room = state === 'running' ? width : width - cells(CLOSE)
+            const state = c.endAt === undefined ? (c.isWaiting ? 'waiting' : 'running') : c.isOk ? 'done' : 'failed'
+            const room = c.endAt === undefined ? width : width - cells(CLOSE)
 
             return (
               <Box key={c.id}>
@@ -292,6 +331,7 @@ export const register: Register = (on, options) => {
                   cells={chipCells({
                     width: room,
                     name: c.description,
+                    model: isModelShown ? modelName(c.model) : '',
                     time: clock((c.endAt ?? now) - c.startTime),
                     state,
                     ratio: c.ratio,
@@ -300,7 +340,7 @@ export const register: Register = (on, options) => {
                     isTwinkling,
                   })}
                 />
-                {state === 'running' ? null : (
+                {c.endAt === undefined ? null : (
                   <Button
                     plain
                     key={`${c.id}:close`}
@@ -361,6 +401,7 @@ export const register: Register = (on, options) => {
             </Box>
           )
         })}
+        {hidden > 0 ? <Text dimColor> +{hidden} more</Text> : null}
       </Box>
     )
   })

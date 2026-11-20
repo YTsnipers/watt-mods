@@ -99,8 +99,40 @@ export function pill(g: Grid, y: number, from: number, to: number, bgAt: (x: num
 const back = (): number[] => (isLight() ? [255, 255, 255] : [24, 24, 27])
 const termFg = (): number[] => (isLight() ? [34, 34, 38] : [236, 234, 246])
 const GREY = [120, 118, 128]
-const RUNNING = [122, 104, 212]
+// Claude's orange for what is running; a blue for an agent that waits on someone (a decision).
+const RUNNING = [217, 119, 87]
+const WAITING = [96, 140, 224]
 const FINISHED = [52, 168, 98]
+const FAILED = [196, 84, 84]
+
+export type ChipState = 'running' | 'waiting' | 'done' | 'failed'
+
+const colorOf = (state: ChipState): number[] =>
+  state === 'done' ? FINISHED : state === 'failed' ? FAILED : state === 'waiting' ? WAITING : RUNNING
+
+// ---------- AA contrast ----------
+// WCAG 2.x contrast, measured on the 4-bit colour the engine paints a Raster cell in (adapted from plan-progress).
+const q17 = (c: number[]): number[] => c.map(v => Math.round(v / 17) * 17)
+
+const relLum = (c: number[]): number => {
+  const l = q17(c).map(v => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4))
+
+  return 0.2126 * (l[0] ?? 0) + 0.7152 * (l[1] ?? 0) + 0.0722 * (l[2] ?? 0)
+}
+
+export const contrast = (a: number[], b: number[]): number =>
+  (Math.max(relLum(a), relLum(b)) + 0.05) / (Math.min(relLum(a), relLum(b)) + 0.05)
+
+// The first candidate that reads at AA (4.5:1) on every background given, else the one that reads best on the
+// worst of them. The theme's own colours are never changed; the text only picks among candidates.
+export function readable(bgs: number[][], ...candidates: number[][]): number[] {
+  const worst = (c: number[]): number => Math.min(...bgs.map(bg => contrast(c, bg)))
+
+  return candidates.find(c => worst(c) >= 4.5) ?? candidates.reduce((a, b) => (worst(b) > worst(a) ? b : a))
+}
+
+// Text on a solid pill: white, else the terminal's own background, else its foreground.
+const inkOn = (bg: number[]): number[] => readable([bg], [255, 255, 255], back(), termFg())
 
 export type TrackArgs = {
   // Cells across, including the label pill's room.
@@ -162,12 +194,10 @@ export function trackCells({ width: W, head: fx, label, isDone, now, isTwinkling
   const kx = Math.round(Math.max(0, Math.min(W - kw, fx - kw / 2)))
 
   pill(g, 0, kx, kx + kw, () => acc)
-  g.text(kx + 1, 0, shown, pack([255, 255, 255]), pack(acc))
+  g.text(kx + 1, 0, shown, pack(inkOn(acc)), pack(acc))
 
   return g.encode()
 }
-
-const FAILED = [196, 84, 84]
 
 export const hexOf = (c: number[]): string => `#${c.map(v => v.toString(16).padStart(2, '0')).join('')}`
 
@@ -181,9 +211,11 @@ const cut = (s: string, width: number): string => {
 export type ChipArgs = {
   width: number
   name: string
+  // The model the agent runs on, already short ("haiku 5.5"); dropped first when the chip is narrow. Empty for none.
+  model: string
   time: string
   // `running` twinkles and fills by `ratio`; the others stand still in their colour.
-  state: 'running' | 'done' | 'failed'
+  state: ChipState
   // How much of its context window the agent has used, 0 to 1: the brighter part of a running chip.
   ratio: number
   frame: number
@@ -191,20 +223,21 @@ export type ChipArgs = {
   isTwinkling: boolean
 }
 
-// The tint a finished chip stands in, and what its close button takes as its own background.
-export const chipTint = (state: 'running' | 'done' | 'failed'): number[] =>
-  mix(back(), state === 'done' ? FINISHED : state === 'failed' ? FAILED : RUNNING, state === 'running' ? 0.18 : 0.34)
+// The tint a chip stands in, and what its close button takes as its own background.
+export const chipTint = (state: ChipState): number[] =>
+  mix(back(), colorOf(state), state === 'running' || state === 'waiting' ? 0.18 : 0.34)
 
-// One agent as a row of cells: a tinted pill, a status dot, the name, the time at the right. A running chip's
-// leading part (what it has spent of its context) is brighter and carries sparse dots that glow, as plan-progress's
-// agent strips do.
-export function chipCells({ width: W, name, time, state, ratio, frame, now, isTwinkling }: ChipArgs): string {
+// One agent as a row of cells: a tinted pill, a status glyph, the name, the model and the time at the right. A
+// running chip's leading part (what it has spent of its context) is brighter and carries sparse dots that glow, as
+// plan-progress's agent strips do. Every word reads at AA on the tint it sits on.
+export function chipCells({ width: W, name, model, time, state, ratio, now, isTwinkling }: ChipArgs): string {
   const g = new Grid(W, 1)
   const isRunning = state === 'running'
-  const color = state === 'done' ? FINISHED : state === 'failed' ? FAILED : RUNNING
+  const color = colorOf(state)
   const tint = chipTint(state)
   const spent = mix(back(), color, 0.3)
   const edge = isRunning && ratio > 0 ? Math.max(1, Math.round(W * ratio)) : 0
+  const bgs = edge > 0 ? [tint, spent] : [tint]
 
   pill(g, 0, 0, W, x => (x < edge ? spent : tint))
 
@@ -215,7 +248,7 @@ export function chipCells({ width: W, name, time, state, ratio, frame, now, isTw
 
       for (let r = 0; r < 4; r += 1) {
         for (let c = 0; c < 2; c += 1) {
-          const sx = col * 2 + c + frame * 0
+          const sx = col * 2 + c
 
           if (hash(sx, r, 5) >= 0.08) {
             continue
@@ -234,18 +267,27 @@ export function chipCells({ width: W, name, time, state, ratio, frame, now, isTw
     }
   }
 
-  const ink = pack(termFg())
-  const dim = pack(mix(tint, termFg(), 0.6))
-  const glyph = state === 'done' ? '✓' : state === 'failed' ? 'x' : '●'
-  const dot = isRunning ? mix(tint, color, 0.3 + 0.7 * q(wave(now, 1100))) : color
+  const fg = termFg()
+  const ink = pack(readable(bgs, fg, [255, 255, 255], [0, 0, 0]))
+  const glyphInk = readable(bgs, color, mix(color, fg, 0.3), mix(color, fg, 0.6), fg)
+  const glyph = state === 'done' ? '✓' : state === 'failed' ? 'x' : state === 'waiting' ? '?' : '●'
+  const pulse = isRunning && isTwinkling ? mix(tint, glyphInk, 0.7 + 0.3 * q(wave(now, 1100))) : glyphInk
 
-  g.text(1, 0, glyph, pack(isRunning && isTwinkling ? dot : color), pack(tint))
+  g.text(1, 0, glyph, pack(readable(bgs, pulse, glyphInk, fg)), pack(tint))
 
+  const dimInk = pack(readable(bgs, mix(tint, fg, 0.6), mix(tint, fg, 0.8), fg))
   const timeAt = W - 1 - time.length
-  const room = Math.max(0, timeAt - 4)
+  const modelAt = timeAt - 2 - model.length
+  const hasModel = model !== '' && modelAt - 4 >= 10
+  const room = Math.max(0, (hasModel ? modelAt : timeAt) - 4)
 
   g.text(3, 0, cut(name, room), ink)
-  g.text(timeAt, 0, time, dim)
+
+  if (hasModel) {
+    g.text(modelAt, 0, model, dimInk)
+  }
+
+  g.text(timeAt, 0, time, dimInk)
 
   return g.encode()
 }
