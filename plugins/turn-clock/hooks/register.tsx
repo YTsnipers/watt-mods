@@ -107,10 +107,13 @@ export const register: Register = on => {
     }
 
     const noun = turn.calls === 1 ? 'tool call' : 'tool calls'
+    const u = e.usage
+    const prompt = u ? u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens : 0
+    const cache = u && prompt > 0 ? `, cache hit ${Math.round((u.cache_read_input_tokens / prompt) * 100)}%` : ''
 
     return {
       ...out,
-      text: `This turn: ${turn.calls} ${noun}, model ${seconds(turn.modelMs)}, tools ${seconds(unionMs(turn.spans))}`,
+      text: `This turn: ${turn.calls} ${noun}, model ${seconds(turn.modelMs)}, tools ${seconds(unionMs(turn.spans))}${cache}`,
     }
   })
 
