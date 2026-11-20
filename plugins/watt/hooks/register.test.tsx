@@ -1,6 +1,4 @@
-import type { On } from 'claude-code'
 import { expect, test } from 'claude-code/testing'
-import type { Engine } from 'claude-code/testing'
 
 import { chipCells, contrast, trackCells } from './raster'
 import { isLight, setThemeSetting } from './tint'
@@ -211,8 +209,8 @@ test('every word on a chip and on the summary reads at AA, on a dark and a light
   setThemeSetting('dark')
 })
 
-const mountRow = async ($: Engine, on: On, count: number, columns: number) => {
-  const many = Array.from({ length: count }, (_, n) => ({ ...agent('running'), id: `m${n}`, description: `probe ${n}` }))
+test('past what fits, the chips fold into +N more', async ($, on) => {
+  const many = Array.from({ length: 12 }, (_, n) => ({ ...agent('running'), id: `m${n}`, description: `probe ${n}` }))
 
   on('agent.list', () => ({ value: many as never }))
   on('clock.now', () => ({ value: 1_005_000 }))
@@ -224,45 +222,13 @@ const mountRow = async ($: Engine, on: On, count: number, columns: number) => {
     return <Text>engine row</Text>
   })
 
-  return $.ui.mount({
+  const ui = await $.ui.mount({
     ...AGENT_ROW('running'),
     requestId: 'm0',
-    props: { ...AGENT_ROW('running').props, id: 'm0', rowIds: many.map(a => a.id), columns },
+    props: { ...AGENT_ROW('running').props, id: 'm0', rowIds: many.map(a => a.id) },
   } as never)
-}
 
-test('three agents all show, on a line of their own under the summary when they would be too narrow beside it', async ($, on) => {
-  const ui = await mountRow($, on, 3, 110)
-
-  // The summary and the three chips.
-  expect(await ui.findAll({ type: 'Raster' })).toHaveLength(4)
-  expect(await ui.find({ type: 'Text', text: /more/ })).toBeUndefined()
-  expect(await ui.find({ key: 'line-1' })).toBeDefined()
-  await ui.unmount()
-})
-
-test('four to a line, the fifth goes to the next line', async ($, on) => {
-  const ui = await mountRow($, on, 5, 110)
-
-  expect(await ui.findAll({ type: 'Raster' })).toHaveLength(6)
-  // Summary line, a line of four, a line of one.
-  expect(await ui.find({ key: 'line-2' })).toBeDefined()
-  expect(await ui.find({ key: 'line-3' })).toBeUndefined()
-  await ui.unmount()
-})
-
-test('past twelve agents the rest fold into +N more', async ($, on) => {
-  const ui = await mountRow($, on, 14, 110)
-
-  expect((await ui.find({ type: 'Text', text: /more/ }))?.text).toMatch(/\+2 more/)
-  await ui.unmount()
-})
-
-test('on a wide terminal the summary shares the first line with its chips', async ($, on) => {
-  const ui = await mountRow($, on, 3, 200)
-
-  expect(await ui.find({ key: 'line-1' })).toBeUndefined()
-  expect(await ui.findAll({ type: 'Raster' })).toHaveLength(4)
+  expect((await ui.find({ type: 'Text', text: /more/ }))?.text).toMatch(/\+\d+ more/)
   await ui.unmount()
 })
 

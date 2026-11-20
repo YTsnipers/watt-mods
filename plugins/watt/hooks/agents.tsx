@@ -20,10 +20,9 @@ const EMPTY = '#26233a'
 const GREEN = '#1f6a42'
 const RED = '#7a2e2e'
 const CLOSE = ' × '
-const PER_ROW = 4
-const MAX_ROWS = 3
-// The width a chip needs to show its model (with a close button on a finished one) beside a short name.
-const MODEL_FITS = 28
+// A chip's least width: glyph, a short name, the model ("haiku 5.5"), the time and a close button. Without the model it
+// can be narrower.
+const minChip = (): number => (prefs.isModelShown ? 28 : 18)
 
 // Terminal cells a string takes: CJK letters take two.
 const cells = (text: string): number => [...text].reduce((n, c) => n + ((c.codePointAt(0) ?? 0) > 0x2e7f ? 2 : 1), 0)
@@ -293,35 +292,23 @@ export const register: Register = (on, options) => {
           cells={trackCells({ width: summaryW, head, label, isDone: isAllDone, now, isTwinkling: prefs.isTwinkling })}
         />
       )
-    // Up to PER_ROW chips a line, then the next line; past MAX_ROWS lines the rest fold into one "+N more".
-    // Each chip takes an equal share of its line but never more than half of the row.
-    const widthFor = (room: number, n: number): number =>
-      Math.max(8, Math.min(Math.floor(row / 2), Math.floor((room - (n - 1)) / n)))
-    const needed = prefs.isModelShown ? MODEL_FITS : 18
-    const capped = chips.slice(0, PER_ROW * MAX_ROWS)
-    const hidden = chips.length - capped.length
-    const grid: Chip[][] = []
-
-    for (let i = 0; i < capped.length; i += PER_ROW) {
-      grid.push(capped.slice(i, i + PER_ROW))
-    }
-
-    // The summary pill shares the first line with its chips while they are still wide enough to show the model;
-    // otherwise it takes a line of its own.
-    const inlineW = widthFor(row - summaryW - 1, grid[0]?.length ?? 1)
-    const isInline = inlineW >= needed
-    const lines: Array<{ chips: Chip[]; width: number; hasSummary: boolean }> = isInline
-      ? grid.map((r, i) => ({ chips: r, width: i === 0 ? inlineW : widthFor(row, r.length), hasSummary: i === 0 }))
-      : [
-          { chips: [], width: 0, hasSummary: true },
-          ...grid.map(r => ({ chips: r, width: widthFor(row, r.length), hasSummary: false })),
-        ]
+    // Chips are at least minChip() wide; past what fits, the rest fold into one "+N more" (unfinished ones first).
+    const total = row - summaryW - 1
+    const fits = (room: number): number => Math.max(1, Math.floor((room + 1) / (minChip() + 1)))
+    const moreW = chips.length > fits(total) ? `+${chips.length} more`.length + 1 : 0
+    const shown = chips.slice(0, fits(total - moreW))
+    const hidden = chips.length - shown.length
+    const share = Math.floor((total - (hidden > 0 ? moreW : 0) - (shown.length - 1)) / shown.length)
+    const width = Math.max(8, Math.min(Math.floor(row / 2), share))
 
     // Pass `isHidden: false` down the chain: a finished agent's row may arrive hidden.
     await next({ ...e, props: { ...e.props, isHidden: false } })
 
-    const chipNode = (c: Chip, i: number, width: number, hasGap: boolean) => {
-          const gap = hasGap ? <Text> </Text> : null
+    return (
+      <Box>
+        {summary}
+        {shown.map((c, i) => {
+          const gap = <Text> </Text>
 
           // Raster chips, the plan-progress way. A Raster is not pressable, so a chip does not open its agent here.
           if (Raster !== null) {
@@ -407,21 +394,8 @@ export const register: Register = (on, options) => {
               </Button>
             </Box>
           )
-    }
-
-    return (
-      <Box flexDirection="column">
-        {lines.map((ln, li) => {
-          const isLast = li === lines.length - 1
-
-          return (
-            <Box key={`line-${String(li)}`}>
-              {ln.hasSummary ? summary : null}
-              {ln.chips.map((c, i) => chipNode(c, chips.indexOf(c), ln.width, ln.hasSummary || i > 0))}
-              {isLast && hidden > 0 ? <Text dimColor> +{hidden} more</Text> : null}
-            </Box>
-          )
         })}
+        {hidden > 0 ? <Text dimColor> +{hidden} more</Text> : null}
       </Box>
     )
   })
