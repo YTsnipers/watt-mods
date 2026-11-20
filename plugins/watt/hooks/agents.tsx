@@ -1,6 +1,7 @@
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import { chipCells, chipTint, hexOf, trackCells } from './raster'
+import { loadThemeSetting, readTint, setThemeSetting } from './tint'
 
 const live = (status: string): boolean => status === 'running' || status === 'waiting' || status === 'pending'
 
@@ -170,6 +171,24 @@ export const register: Register = (on, options) => {
   isTwinkling = options?.twinkle !== false
   isSoundOn = options?.sounds !== false
 
+  on('session.start', async ($, e, next) => {
+    await loadThemeSetting($)
+
+    return next(e)
+  })
+
+  // A new theme repaints the row at once.
+  on('config.set', { key: 'theme' }, async ($, e, next) => {
+    const out = await next(e)
+
+    if (out.deny === undefined) {
+      setThemeSetting(String(out.value))
+      $.ui.invalidate('ui.render')
+    }
+
+    return out
+  })
+
   on('classic.SubagentStart', async ($, e, next) => {
     stopped.delete(e.agent_id)
     dismissed.delete(e.agent_id)
@@ -207,6 +226,8 @@ export const register: Register = (on, options) => {
     if (e.props.id !== lead.id) {
       return next({ ...e, props: { ...e.props, isHidden: true } })
     }
+
+    await readTint($, now)
 
     const t = $.ui.resolve(e)
     const { Box, Text, Button } = t

@@ -6,6 +6,8 @@
 // plan-progress measures every character against a width table; here the allowed set is small and fixed: ASCII, a
 // few symbols, and a middle dot for the rest (CJK, emoji).
 
+import { isLight } from './tint'
+
 export const DEFAULT = 0x01000000
 
 type Cell = [number, number, number]
@@ -93,8 +95,9 @@ export function pill(g: Grid, y: number, from: number, to: number, bgAt: (x: num
   }
 }
 
-// What the terminal's own background is taken to be: a dark one. plan-progress reads the real one; this does not.
-const BACK = [24, 24, 32]
+// What the terminal's own background is taken to be, from tint.ts: white or near-black.
+const back = (): number[] => (isLight() ? [255, 255, 255] : [24, 24, 27])
+const termFg = (): number[] => (isLight() ? [34, 34, 38] : [236, 234, 246])
 const GREY = [120, 118, 128]
 const RUNNING = [122, 104, 212]
 const FINISHED = [52, 168, 98]
@@ -116,7 +119,7 @@ export function trackCells({ width: W, head: fx, label, isDone, now, isTwinkling
   const g = new Grid(W, 1)
   const acc = isDone ? FINISHED : RUNNING
   const light = mix(acc, [255, 255, 255], 0.35)
-  const track = mix(BACK, [128, 128, 128], 0.18)
+  const track = mix(back(), [128, 128, 128], isLight() ? 0.14 : 0.18)
   const fill = mix(track, acc, isDone ? 0.3 : 0.17)
 
   pill(g, 0, 0, W, x => (x + 0.5 < fx ? fill : track))
@@ -190,7 +193,7 @@ export type ChipArgs = {
 
 // The tint a finished chip stands in, and what its close button takes as its own background.
 export const chipTint = (state: 'running' | 'done' | 'failed'): number[] =>
-  mix(BACK, state === 'done' ? FINISHED : state === 'failed' ? FAILED : RUNNING, state === 'running' ? 0.18 : 0.34)
+  mix(back(), state === 'done' ? FINISHED : state === 'failed' ? FAILED : RUNNING, state === 'running' ? 0.18 : 0.34)
 
 // One agent as a row of cells: a tinted pill, a status dot, the name, the time at the right. A running chip's
 // leading part (what it has spent of its context) is brighter and carries sparse dots that glow, as plan-progress's
@@ -200,7 +203,7 @@ export function chipCells({ width: W, name, time, state, ratio, frame, now, isTw
   const isRunning = state === 'running'
   const color = state === 'done' ? FINISHED : state === 'failed' ? FAILED : RUNNING
   const tint = chipTint(state)
-  const spent = mix(BACK, color, 0.3)
+  const spent = mix(back(), color, 0.3)
   const edge = isRunning && ratio > 0 ? Math.max(1, Math.round(W * ratio)) : 0
 
   pill(g, 0, 0, W, x => (x < edge ? spent : tint))
@@ -231,8 +234,8 @@ export function chipCells({ width: W, name, time, state, ratio, frame, now, isTw
     }
   }
 
-  const ink = pack([236, 234, 246])
-  const dim = pack(mix(tint, [236, 234, 246], 0.6))
+  const ink = pack(termFg())
+  const dim = pack(mix(tint, termFg(), 0.6))
   const glyph = state === 'done' ? '✓' : state === 'failed' ? 'x' : '●'
   const dot = isRunning ? mix(tint, color, 0.3 + 0.7 * q(wave(now, 1100))) : color
 

@@ -1,5 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
+import { isLight, setThemeSetting } from './tint'
+
 const ROW = {
   plugin: 'watt',
   component: 'ToolUse',
@@ -92,6 +94,7 @@ test('a finished agent turns green, stays, and has a close button', async ($, on
   on('clock.after', () => ({ value: { cancel: () => {} } as never }))
   on('clock.every', () => ({ value: { cancel: () => {} } as never }))
   on('audio.play', () => ({ value: undefined }))
+  on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: '' } as never }))
   on('classic.SubagentStart', () => ({}))
   on('classic.SubagentStop', () => ({}))
   on('ui.invalidate', () => ({ value: undefined }))
@@ -134,4 +137,17 @@ test('a finished agent turns green, stays, and has a close button', async ($, on
 
   expect(await gone.find({ type: 'Raster' })).toBeUndefined()
   await gone.unmount()
+})
+
+test('the terminal is light when the theme says so', () => {
+  setThemeSetting('light')
+  expect(isLight()).toBe(true)
+
+  setThemeSetting('dark-ansi')
+  expect(isLight()).toBe(false)
+
+  setThemeSetting('light-daltonized')
+  expect(isLight()).toBe(true)
+
+  setThemeSetting('dark')
 })
