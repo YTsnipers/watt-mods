@@ -73,10 +73,10 @@ test('a finished agent turns green, stays, and has a close button', async ($, on
   let status: 'running' | 'completed' = 'running'
   let now = 1_005_000
 
-  on('agent.list', () => ({ value: [agent(status)] }))
+  on('agent.list', () => ({ value: [agent(status)] as never }))
   on('clock.now', () => ({ value: now }))
-  on('clock.after', () => ({ value: { cancel: () => {} } }))
-  on('clock.every', () => ({ value: { cancel: () => {} } }))
+  on('clock.after', () => ({ value: { cancel: () => {} } as never }))
+  on('clock.every', () => ({ value: { cancel: () => {} } as never }))
   on('classic.SubagentStart', () => ({}))
   on('classic.SubagentStop', () => ({}))
   on('ui.invalidate', () => ({ value: undefined }))
@@ -86,23 +86,28 @@ test('a finished agent turns green, stays, and has a close button', async ($, on
     return <Text>engine row</Text>
   })
 
-  const running = await $.ui.mount(AGENT_ROW('running'))
+  const running = await $.ui.mount(AGENT_ROW('running') as never)
 
   expect((await running.find({ type: 'Text', text: /sandbox probe/ }))?.text).toMatch(/5s/)
   await running.unmount()
 
   status = 'completed'
   now = 1_030_000
-  await $.classic.SubagentStop({ agent_id: 'a1' })
+  await $.classic.SubagentStop({
+    agent_id: 'a1',
+    agent_type: 'general-purpose',
+    stop_hook_active: false,
+    agent_transcript_path: '/dev/null',
+  })
 
-  const done = await $.ui.mount(AGENT_ROW('completed'))
+  const done = await $.ui.mount(AGENT_ROW('completed') as never)
 
   expect((await done.find({ type: 'Text', text: /✓/ }))?.text).toMatch(/✓ sandbox probe\s+30s/)
   expect(await done.find({ type: 'Text', text: /×/ })).toBeDefined()
   await done.unmount()
 
   now = 1_030_000 + 121_000
-  const gone = await $.ui.mount(AGENT_ROW('completed'))
+  const gone = await $.ui.mount(AGENT_ROW('completed') as never)
 
   expect(await gone.find({ type: 'Text', text: /✓/ })).toBeUndefined()
   await gone.unmount()
