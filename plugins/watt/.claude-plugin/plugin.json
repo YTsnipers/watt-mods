@@ -23,6 +23,12 @@
       "title": "Play a sound when the last agent ends",
       "description": "A soft sound when all running subagents finish; another when one failed",
       "default": true
+    },
+    "showModel": {
+      "type": "boolean",
+      "title": "Show the model on each chip",
+      "description": "The model each subagent runs on, dimmed beside its time; dropped first when a chip is narrow",
+      "default": true
     }
   }
 }

@@ -231,3 +231,45 @@ test('past what fits, the chips fold into +N more', async ($, on) => {
   expect((await ui.find({ type: 'Text', text: /more/ }))?.text).toMatch(/\+\d+ more/)
   await ui.unmount()
 })
+
+const SETTINGS = {
+  plugin: 'watt',
+  component: 'Pane',
+  requestId: 'watt-settings',
+  surface: 'terminal',
+  props: {
+    title: 'watt settings',
+    isFocused: false,
+    bodyColumns: 60,
+    placement: 'dock',
+    scroll: { offset: 0, bodyRows: 20 },
+    view: {},
+  },
+} as const
+
+test('the settings window lists four choices and a press changes one', async ($, on) => {
+  const set: Array<{ key: string; value: unknown }> = []
+
+  on('config.set', (_, e) => {
+    set.push({ key: e.key, value: e.value })
+
+    return { value: e.value }
+  })
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+
+    return <Text>engine</Text>
+  })
+
+  const ui = await $.ui.mount(SETTINGS as never)
+
+  expect(await ui.findAll({ type: 'Button' })).toHaveLength(4)
+  expect((await ui.find({ key: 'sounds' }))?.text).toMatch(/\[x\] Sounds/)
+
+  await ui.press({ key: 'sounds' })
+
+  // The mod runs apart from the test, so what it did shows in what it asked of the engine.
+  expect(set).toEqual([{ key: 'watt.sounds', value: false }])
+  expect((await ui.find({ key: 'sounds' }))?.text).toMatch(/\[ \] Sounds/)
+  await ui.unmount()
+})

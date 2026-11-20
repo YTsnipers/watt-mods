@@ -3,6 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Durations } from '../types'
 import { register as registerAgents } from './agents'
+import { register as registerSettings } from './settings'
 
 const durations = atom({ plugin: 'watt', key: 'durations' } as const, {} as Durations)
 
@@ -64,6 +65,7 @@ async function record(
 
 export const register: Register = (on, options) => {
   registerAgents(on, options)
+  registerSettings(on, options)
 
   on('turn.start', ($, e, next) => {
     if (e.agentId === undefined) {

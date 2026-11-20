@@ -1,6 +1,8 @@
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
+import { loadPrefs, prefs } from './prefs'
 import { chipCells, chipTint, hexOf, trackCells } from './raster'
+import { startSettings } from './settings'
 import { loadThemeSetting, readTint, setThemeSetting } from './tint'
 
 const live = (status: string): boolean => status === 'running' || status === 'waiting' || status === 'pending'
@@ -12,7 +14,6 @@ const clock = (ms: number): string => {
 }
 
 const FRAME_MS = 250
-const KEEP_MS = 20_000
 const SPIN = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
 const PULSE = ['#5a4aa3', '#6a58c0', '#7a68d4', '#6a58c0']
 const EMPTY = '#26233a'
@@ -88,7 +89,7 @@ type Chip = {
   ratio: number
   description: string
   startTime: number
-  // Set once the agent has finished: the chip turns green (or red) and stays KEEP_MS or until closed.
+  // Set once the agent has finished: the chip turns green (or red) and stays for the chosen seconds or until closed.
   endAt?: number
   isOk: boolean
 }
@@ -102,11 +103,6 @@ const dismissed = new Set<string>()
 // Ids whose SubagentStop fired in the last 2s: their status may still read `running` for a moment.
 const stopped = new Set<string>()
 let timer: Timer | undefined
-// Set from the plugin's options when it registers.
-let keepMs = KEEP_MS
-let isTwinkling = true
-let isSoundOn = true
-let isModelShown = true
 // Agents that waited at the last sync: a decision sound plays for one that starts to.
 let waiting = new Set<string>()
 // How far the summary fill has got, in cells: it glides toward its target a frame at a time.
@@ -154,7 +150,7 @@ async function settle($: EngineInterface): Promise<Chip[]> {
   }
 
   for (const [id, chip] of finished) {
-    if (dismissed.has(id) || now - (chip.endAt ?? now) > keepMs) {
+    if (dismissed.has(id) || now - (chip.endAt ?? now) > prefs.keepMs) {
       finished.delete(id)
       seen.delete(id)
     }
@@ -168,7 +164,7 @@ async function sync($: EngineInterface): Promise<void> {
   const active = await settle($)
 
   // The last running agent just ended: one soft sound, the error one if any of the finished failed.
-  if (isSoundOn && lastActive > 0 && active.length === 0 && finished.size > 0) {
+  if (prefs.isSoundOn && lastActive > 0 && active.length === 0 && finished.size > 0) {
     const name = [...finished.values()].some(c => !c.isOk) ? 'error' : 'done'
 
     void $.audio.play({ asset: `sounds/${name}.wav` }).catch(() => undefined)
@@ -179,7 +175,7 @@ async function sync($: EngineInterface): Promise<void> {
   // An agent that starts to wait on someone: the decision sound, once for each time it begins to.
   const nowWaiting = new Set(active.filter(c => c.isWaiting).map(c => c.id))
 
-  if (isSoundOn && [...nowWaiting].some(id => !waiting.has(id))) {
+  if (prefs.isSoundOn && [...nowWaiting].some(id => !waiting.has(id))) {
     void $.audio.play({ asset: 'sounds/decision.wav' }).catch(() => undefined)
   }
 
@@ -198,15 +194,11 @@ async function sync($: EngineInterface): Promise<void> {
 }
 
 export const register: Register = (on, options) => {
-  const seconds = Number(options?.keepSeconds ?? KEEP_MS / 1000)
-
-  keepMs = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : KEEP_MS
-  isTwinkling = options?.twinkle !== false
-  isSoundOn = options?.sounds !== false
-  isModelShown = options?.showModel !== false
+  loadPrefs(options)
 
   on('session.start', async ($, e, next) => {
     await loadThemeSetting($)
+    await startSettings($)
 
     return next(e)
   })
@@ -249,7 +241,7 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'AgentRow' }, async ($, e, next) => {
     const active = await running($)
     const now = await $.clock.now()
-    const done = [...finished.values()].filter(c => !dismissed.has(c.id) && now - (c.endAt ?? now) <= keepMs)
+    const done = [...finished.values()].filter(c => !dismissed.has(c.id) && now - (c.endAt ?? now) <= prefs.keepMs)
     const chips = [...active, ...done]
     const lead = chips.find(c => e.props.rowIds.includes(c.id))
 
@@ -295,7 +287,7 @@ export const register: Register = (on, options) => {
           key="summary"
           columns={summaryW}
           rows={1}
-          cells={trackCells({ width: summaryW, head, label, isDone: isAllDone, now, isTwinkling })}
+          cells={trackCells({ width: summaryW, head, label, isDone: isAllDone, now, isTwinkling: prefs.isTwinkling })}
         />
       )
     // Chips are at least MIN_CHIP wide; past what fits, the rest fold into one "+N more" (unfinished ones first).
@@ -331,13 +323,13 @@ export const register: Register = (on, options) => {
                   cells={chipCells({
                     width: room,
                     name: c.description,
-                    model: isModelShown ? modelName(c.model) : '',
+                    model: prefs.isModelShown ? modelName(c.model) : '',
                     time: clock((c.endAt ?? now) - c.startTime),
                     state,
                     ratio: c.ratio,
                     frame: frame + i,
                     now,
-                    isTwinkling,
+                    isTwinkling: prefs.isTwinkling,
                   })}
                 />
                 {c.endAt === undefined ? null : (
