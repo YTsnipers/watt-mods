@@ -4,8 +4,8 @@
   "metadata": { "description": "Personal Claude Code mods" },
   "plugins": [
     {
-      "name": "turn-clock",
-      "source": "./plugins/turn-clock",
+      "name": "watt",
+      "source": "./plugins/watt",
       "description": "Per-tool-call duration and per-turn tool count, model time, tool time"
     }
   ]

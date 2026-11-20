@@ -2,10 +2,12 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Durations } from '../types'
+import { register as registerAgents } from './agents'
 
-const durations = atom({ plugin: 'turn-clock', key: 'durations' } as const, {} as Durations)
+const durations = atom({ plugin: 'watt', key: 'durations' } as const, {} as Durations)
 
 const KEEP = 400
+const CONTEXT_WINDOW = 1_000_000
 
 type Span = [start: number, end: number]
 
@@ -60,7 +62,9 @@ async function record(
   })
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  registerAgents(on, options)
+
   on('turn.start', ($, e, next) => {
     if (e.agentId === undefined) {
       turn.modelMs = 0
@@ -111,9 +115,14 @@ export const register: Register = on => {
     const prompt = u ? u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens : 0
     const cache = u && prompt > 0 ? `, cache hit ${Math.round((u.cache_read_input_tokens / prompt) * 100)}%` : ''
 
+    const { context, rateLimits } = await $.session.usage()
+    const ctx = context.tokens === undefined ? '' : `, context ${((context.tokens / CONTEXT_WINDOW) * 100).toFixed(1)}%`
+    const fiveHour = rateLimits.find(r => r.kind === 'five_hour')
+    const usage = fiveHour ? `, usage ${fiveHour.percentUsed}%` : ''
+
     return {
       ...out,
-      text: `This turn: ${turn.calls} ${noun}, model ${seconds(turn.modelMs)}, tools ${seconds(unionMs(turn.spans))}${cache}`,
+      text: `This turn: ${turn.calls} ${noun}, model ${seconds(turn.modelMs)}, tools ${seconds(unionMs(turn.spans))}${cache}${ctx}${usage}`,
     }
   })
 

@@ -1,5 +1,5 @@
 {
-  "name": "turn-clock",
+  "name": "watt",
   "version": "0.1.0",
   "description": "Shows how long each tool call took, and per turn: tool call count, time waiting on the model, time running commands.",
   "types": "./types/index.d.ts"
