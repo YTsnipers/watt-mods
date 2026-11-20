@@ -187,17 +187,30 @@ export const register: Register = on => {
     const frame = Math.floor(now / FRAME_MS)
     // Chips sit left, one cell apart. Each takes an equal share of the row but never more than half of it.
     // The row's own pointer and margin sit outside `columns`; keep 6 cells spare so it never wraps.
-    const total = (e.props.columns ?? 80) - 6
+    const row = (e.props.columns ?? 80) - 6
+    // The summary pill leads the row, as plan-progress's bar does: state, count, percent; its fill is the share of agents done.
+    const doneCount = done.length
+    const isAllDone = active.length === 0
+    const pct = isAllDone ? 100 : Math.round((doneCount / chips.length) * 100)
+    const label = isAllDone
+      ? `✓ Done ${doneCount}/${chips.length}  100%`
+      : `● 進行中 ${doneCount}/${chips.length}  ${String(pct)}%`
+    const summaryW = Math.max(18, cells(label) + 2)
+    const summary = fit(label, summaryW)
+    const [filledText, restText] = split(summary, isAllDone ? summaryW : Math.round(summaryW * (doneCount / chips.length)))
+    const total = row - summaryW - 1
     const share = Math.floor((total - (chips.length - 1)) / chips.length)
-    const width = Math.max(8, Math.min(Math.floor(total / 2), share))
+    const width = Math.max(8, Math.min(Math.floor(row / 2), share))
 
     // Pass `isHidden: false` down the chain: a finished agent's row may arrive hidden.
     await next({ ...e, props: { ...e.props, isHidden: false } })
 
     return (
       <Box>
+        {filledText === '' ? null : <Text backgroundColor={GREEN}>{filledText}</Text>}
+        {restText === '' ? null : <Text backgroundColor={EMPTY}>{restText}</Text>}
         {chips.map((c, i) => {
-          const gap = i > 0 ? <Text> </Text> : null
+          const gap = <Text> </Text>
 
           if (c.endAt === undefined) {
             // The fill follows the context window used: the purple part is what is spent, the dark part what is left.

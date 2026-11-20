@@ -91,6 +91,7 @@ test('a finished agent turns green, stays, and has a close button', async ($, on
   const chip = (await running.find({ type: 'Text', text: /sandbox probe/ }))?.text
 
   expect(chip).toMatch(/5s/)
+  expect((await running.find({ type: 'Text', text: /進行中/ }))?.text).toMatch(/● 進行中 0\/1\s+0%/)
   // One chip takes at most half of the row (80 columns less 6 spare).
   expect(chip?.length).toBeLessThanOrEqual(37)
   await running.unmount()
@@ -106,13 +107,14 @@ test('a finished agent turns green, stays, and has a close button', async ($, on
 
   const done = await $.ui.mount(AGENT_ROW('completed') as never)
 
-  expect((await done.find({ type: 'Text', text: /✓/ }))?.text).toMatch(/✓ sandbox probe\s+30s/)
+  expect((await done.find({ type: 'Text', text: /Done/ }))?.text).toMatch(/✓ Done 1\/1\s+100%/)
+  expect((await done.find({ type: 'Text', text: /sandbox probe/ }))?.text).toMatch(/✓ sandbox probe\s+30s/)
   expect(await done.find({ type: 'Text', text: /×/ })).toBeDefined()
   await done.unmount()
 
   now = 1_030_000 + 121_000
   const gone = await $.ui.mount(AGENT_ROW('completed') as never)
 
-  expect(await gone.find({ type: 'Text', text: /✓/ })).toBeUndefined()
+  expect(await gone.find({ type: 'Text', text: /Done/ })).toBeUndefined()
   await gone.unmount()
 })
