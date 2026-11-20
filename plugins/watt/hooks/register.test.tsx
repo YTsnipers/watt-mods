@@ -129,7 +129,7 @@ test('a finished agent turns green, stays, and has a close button', async ($, on
   expect(await done.find({ type: 'Text', text: /×/ })).toBeDefined()
   await done.unmount()
 
-  now = 1_030_000 + 121_000
+  now = 1_030_000 + 21_000
   const gone = await $.ui.mount(AGENT_ROW('completed') as never)
 
   expect(await gone.find({ type: 'Raster' })).toBeUndefined()

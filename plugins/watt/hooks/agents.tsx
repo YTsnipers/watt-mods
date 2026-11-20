@@ -11,7 +11,7 @@ const clock = (ms: number): string => {
 }
 
 const FRAME_MS = 250
-const KEEP_MS = 120_000
+const KEEP_MS = 20_000
 const SPIN = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
 const PULSE = ['#5a4aa3', '#6a58c0', '#7a68d4', '#6a58c0']
 const EMPTY = '#26233a'

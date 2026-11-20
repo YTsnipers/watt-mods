@@ -9,7 +9,7 @@
       "type": "number",
       "title": "Finished agents stay (seconds)",
       "description": "How long a finished subagent's chip stays in the agent row, until its × is pressed",
-      "default": 120,
+      "default": 20,
       "min": 1
     },
     "twinkle": {
