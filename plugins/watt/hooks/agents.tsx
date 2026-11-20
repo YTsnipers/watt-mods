@@ -11,7 +11,8 @@ const clock = (ms: number): string => {
 const FRAME_MS = 250
 const KEEP_MS = 120_000
 const SPIN = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
-const PULSE = ['#3a2f6b', '#4a3d86', '#5a4aa3', '#4a3d86']
+const PULSE = ['#5a4aa3', '#6a58c0', '#7a68d4', '#6a58c0']
+const EMPTY = '#26233a'
 const GREEN = '#1f6a42'
 const RED = '#7a2e2e'
 const CLOSE = ' × '
@@ -46,8 +47,29 @@ const fit = (text: string, width: number): string => {
   return ' '.repeat(left) + out + ' '.repeat(width - used - left)
 }
 
+// `text` cut after `n` cells: [the part that fits, the rest].
+const split = (text: string, n: number): [string, string] => {
+  const chars = [...text]
+  let used = 0
+  let i = 0
+
+  for (; i < chars.length; i += 1) {
+    const w = cells(chars[i] as string)
+
+    if (used + w > n) {
+      break
+    }
+
+    used += w
+  }
+
+  return [chars.slice(0, i).join(''), chars.slice(i).join('')]
+}
+
 type Chip = {
   id: string
+  // How much of its context window the agent has used, 0 to 1: the fill of a running chip.
+  ratio: number
   description: string
   startTime: number
   // Set once the agent has finished: the chip turns green (or red) and stays KEEP_MS or until closed.
@@ -69,7 +91,9 @@ async function running($: EngineInterface): Promise<Chip[]> {
   const agents = (await $.agent.list()).filter(a => a.hasRow && !stopped.has(a.id) && live(a.status))
 
   for (const a of agents) {
-    seen.set(a.id, { id: a.id, description: a.description, startTime: a.startTime, isOk: true })
+    const ratio = a.contextWindowSize ? Math.min(1, a.tokenCount / a.contextWindowSize) : 0
+
+    seen.set(a.id, { id: a.id, ratio, description: a.description, startTime: a.startTime, isOk: true })
     // An agent that came back to work after a stop leaves the finished list.
     finished.delete(a.id)
   }
@@ -161,10 +185,11 @@ export const register: Register = on => {
 
     const { Box, Text, Button } = $.ui.resolve(e)
     const frame = Math.floor(now / FRAME_MS)
-    // The chips share the row's width equally, one cell between them.
+    // Chips sit left, one cell apart. Each takes an equal share of the row but never more than half of it.
     // The row's own pointer and margin sit outside `columns`; keep 6 cells spare so it never wraps.
     const total = (e.props.columns ?? 80) - 6
-    const width = Math.max(8, Math.floor((total - (chips.length - 1)) / chips.length))
+    const share = Math.floor((total - (chips.length - 1)) / chips.length)
+    const width = Math.max(8, Math.min(Math.floor(total / 2), share))
 
     // Pass `isHidden: false` down the chain: a finished agent's row may arrive hidden.
     await next({ ...e, props: { ...e.props, isHidden: false } })
@@ -175,13 +200,17 @@ export const register: Register = on => {
           const gap = i > 0 ? <Text> </Text> : null
 
           if (c.endAt === undefined) {
+            // The fill follows the context window used: the purple part is what is spent, the dark part what is left.
+            const text = fit(`${SPIN[(frame + i) % SPIN.length]} ${c.description}  ${clock(now - c.startTime)}`, width)
+            const filled = c.ratio > 0 ? Math.max(1, Math.round(width * c.ratio)) : 0
+            const [spent, left] = split(text, filled)
+
             return (
               <Box key={c.id}>
                 {gap}
                 <Button plain key={c.id} onPress={() => void $.ui.view({ agentId: c.id })}>
-                  <Text backgroundColor={PULSE[(frame + i) % PULSE.length]}>
-                    {fit(`${SPIN[(frame + i) % SPIN.length]} ${c.description}  ${clock(now - c.startTime)}`, width)}
-                  </Text>
+                  {spent === '' ? null : <Text backgroundColor={PULSE[(frame + i) % PULSE.length]}>{spent}</Text>}
+                  <Text backgroundColor={EMPTY}>{left}</Text>
                 </Button>
               </Box>
             )

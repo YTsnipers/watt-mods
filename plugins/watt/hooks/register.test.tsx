@@ -88,7 +88,11 @@ test('a finished agent turns green, stays, and has a close button', async ($, on
 
   const running = await $.ui.mount(AGENT_ROW('running') as never)
 
-  expect((await running.find({ type: 'Text', text: /sandbox probe/ }))?.text).toMatch(/5s/)
+  const chip = (await running.find({ type: 'Text', text: /sandbox probe/ }))?.text
+
+  expect(chip).toMatch(/5s/)
+  // One chip takes at most half of the row (80 columns less 6 spare).
+  expect(chip?.length).toBeLessThanOrEqual(37)
   await running.unmount()
 
   status = 'completed'
