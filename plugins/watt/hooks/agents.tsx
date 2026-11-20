@@ -178,7 +178,7 @@ export const register: Register = on => {
             return (
               <Box key={c.id}>
                 {gap}
-                <Button key={c.id} onPress={() => void $.ui.view({ agentId: c.id })}>
+                <Button plain key={c.id} onPress={() => void $.ui.view({ agentId: c.id })}>
                   <Text backgroundColor={PULSE[(frame + i) % PULSE.length]}>
                     {fit(`${SPIN[(frame + i) % SPIN.length]} ${c.description}  ${clock(now - c.startTime)}`, width)}
                   </Text>
@@ -193,12 +193,13 @@ export const register: Register = on => {
           return (
             <Box key={c.id}>
               {gap}
-              <Button key={`${c.id}:view`} onPress={() => void $.ui.view({ agentId: c.id })}>
+              <Button plain key={`${c.id}:view`} onPress={() => void $.ui.view({ agentId: c.id })}>
                 <Text backgroundColor={color}>
                   {fit(`${mark} ${c.description}  ${clock(c.endAt - c.startTime)}`, width - cells(CLOSE))}
                 </Text>
               </Button>
               <Button
+                plain
                 key={`${c.id}:close`}
                 onPress={() => {
                   dismissed.add(c.id)
