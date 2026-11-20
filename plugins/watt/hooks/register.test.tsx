@@ -46,6 +46,20 @@ test('a running call shows no duration', async ($, on) => {
   await ui.unmount()
 })
 
+// The characters a Raster's cells hold, its Braille dots left out.
+const rasterText = (cells: string): string => {
+  const words = new Uint32Array(Uint8Array.from(atob(cells), c => c.charCodeAt(0)).buffer)
+  let out = ''
+
+  for (let i = 0; i < words.length; i += 3) {
+    const cp = words[i] ?? 32
+
+    out += cp >= 0x2800 && cp <= 0x28ff ? ' ' : String.fromCodePoint(cp)
+  }
+
+  return out.replace(/\s+/g, ' ').trim()
+}
+
 const agent = (status: 'running' | 'completed') => ({
   id: 'a1',
   description: 'sandbox probe',
@@ -77,6 +91,7 @@ test('a finished agent turns green, stays, and has a close button', async ($, on
   on('clock.now', () => ({ value: now }))
   on('clock.after', () => ({ value: { cancel: () => {} } as never }))
   on('clock.every', () => ({ value: { cancel: () => {} } as never }))
+  on('audio.play', () => ({ value: undefined }))
   on('classic.SubagentStart', () => ({}))
   on('classic.SubagentStop', () => ({}))
   on('ui.invalidate', () => ({ value: undefined }))
@@ -91,7 +106,9 @@ test('a finished agent turns green, stays, and has a close button', async ($, on
   const chip = (await running.find({ type: 'Text', text: /sandbox probe/ }))?.text
 
   expect(chip).toMatch(/5s/)
-  expect((await running.find({ type: 'Text', text: /進行中/ }))?.text).toMatch(/● 進行中 0\/1\s+0%/)
+  const bar = await running.find({ type: 'Raster' })
+
+  expect(rasterText(bar?.props.cells as string)).toBe('● 0/1 0%')
   // One chip takes at most half of the row (80 columns less 6 spare).
   expect(chip?.length).toBeLessThanOrEqual(37)
   await running.unmount()
@@ -107,7 +124,7 @@ test('a finished agent turns green, stays, and has a close button', async ($, on
 
   const done = await $.ui.mount(AGENT_ROW('completed') as never)
 
-  expect((await done.find({ type: 'Text', text: /Done/ }))?.text).toMatch(/✓ Done 1\/1\s+100%/)
+  expect(rasterText((await done.find({ type: 'Raster' }))?.props.cells as string)).toBe('✓ Done 1/1 100%')
   expect((await done.find({ type: 'Text', text: /sandbox probe/ }))?.text).toMatch(/✓ sandbox probe\s+30s/)
   expect(await done.find({ type: 'Text', text: /×/ })).toBeDefined()
   await done.unmount()
@@ -115,6 +132,6 @@ test('a finished agent turns green, stays, and has a close button', async ($, on
   now = 1_030_000 + 121_000
   const gone = await $.ui.mount(AGENT_ROW('completed') as never)
 
-  expect(await gone.find({ type: 'Text', text: /Done/ })).toBeUndefined()
+  expect(await gone.find({ type: 'Raster' })).toBeUndefined()
   await gone.unmount()
 })

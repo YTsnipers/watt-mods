@@ -2,5 +2,27 @@
   "name": "watt",
   "version": "0.1.0",
   "description": "Shows how long each tool call took, and per turn: tool call count, time waiting on the model, time running commands.",
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "license": "MIT",
+  "userConfig": {
+    "keepSeconds": {
+      "type": "number",
+      "title": "Finished agents stay (seconds)",
+      "description": "How long a finished subagent's chip stays in the agent row, until its × is pressed",
+      "default": 120,
+      "min": 1
+    },
+    "twinkle": {
+      "type": "boolean",
+      "title": "Twinkle the pixel fill",
+      "description": "Animate the dots of the summary fill. Off, they are drawn still",
+      "default": true
+    },
+    "sounds": {
+      "type": "boolean",
+      "title": "Play a sound when the last agent ends",
+      "description": "A soft sound when all running subagents finish; another when one failed",
+      "default": true
+    }
+  }
 }

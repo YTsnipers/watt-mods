@@ -1,5 +1,7 @@
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
+import { trackCells } from './raster'
+
 const live = (status: string): boolean => status === 'running' || status === 'waiting' || status === 'pending'
 
 const clock = (ms: number): string => {
@@ -86,6 +88,14 @@ const dismissed = new Set<string>()
 // Ids whose SubagentStop fired in the last 2s: their status may still read `running` for a moment.
 const stopped = new Set<string>()
 let timer: Timer | undefined
+// Set from the plugin's options when it registers.
+let keepMs = KEEP_MS
+let isTwinkling = true
+let isSoundOn = true
+// How far the summary fill has got, in cells: it glides toward its target a frame at a time.
+let head = 0
+// Running agents at the last sync, and the ids already announced: a sound plays when the last one ends.
+let lastActive = 0
 
 async function running($: EngineInterface): Promise<Chip[]> {
   const agents = (await $.agent.list()).filter(a => a.hasRow && !stopped.has(a.id) && live(a.status))
@@ -119,7 +129,7 @@ async function settle($: EngineInterface): Promise<Chip[]> {
   }
 
   for (const [id, chip] of finished) {
-    if (dismissed.has(id) || now - (chip.endAt ?? now) > KEEP_MS) {
+    if (dismissed.has(id) || now - (chip.endAt ?? now) > keepMs) {
       finished.delete(id)
       seen.delete(id)
     }
@@ -131,6 +141,15 @@ async function settle($: EngineInterface): Promise<Chip[]> {
 // Redraw four times a second while any chip shows: the elapsed times and the animation move.
 async function sync($: EngineInterface): Promise<void> {
   const active = await settle($)
+
+  // The last running agent just ended: one soft sound, the error one if any of the finished failed.
+  if (isSoundOn && lastActive > 0 && active.length === 0 && finished.size > 0) {
+    const name = [...finished.values()].some(c => !c.isOk) ? 'error' : 'done'
+
+    void $.audio.play({ asset: `sounds/${name}.wav` }).catch(() => undefined)
+  }
+
+  lastActive = active.length
 
   if (active.length > 0 || finished.size > 0) {
     timer ??= $.clock.every(FRAME_MS, () => {
@@ -144,7 +163,13 @@ async function sync($: EngineInterface): Promise<void> {
   $.ui.invalidate('ui.render')
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  const seconds = Number(options?.keepSeconds ?? KEEP_MS / 1000)
+
+  keepMs = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : KEEP_MS
+  isTwinkling = options?.twinkle !== false
+  isSoundOn = options?.sounds !== false
+
   on('classic.SubagentStart', async ($, e, next) => {
     stopped.delete(e.agent_id)
     dismissed.delete(e.agent_id)
@@ -171,7 +196,7 @@ export const register: Register = on => {
   on('ui.render', { component: 'AgentRow' }, async ($, e, next) => {
     const active = await running($)
     const now = await $.clock.now()
-    const done = [...finished.values()].filter(c => !dismissed.has(c.id) && now - (c.endAt ?? now) <= KEEP_MS)
+    const done = [...finished.values()].filter(c => !dismissed.has(c.id) && now - (c.endAt ?? now) <= keepMs)
     const chips = [...active, ...done]
     const lead = chips.find(c => e.props.rowIds.includes(c.id))
 
@@ -183,21 +208,41 @@ export const register: Register = on => {
       return next({ ...e, props: { ...e.props, isHidden: true } })
     }
 
-    const { Box, Text, Button } = $.ui.resolve(e)
+    const t = $.ui.resolve(e)
+    const { Box, Text, Button } = t
+    const Raster = 'Raster' in t ? t.Raster : null
     const frame = Math.floor(now / FRAME_MS)
     // Chips sit left, one cell apart. Each takes an equal share of the row but never more than half of it.
     // The row's own pointer and margin sit outside `columns`; keep 6 cells spare so it never wraps.
     const row = (e.props.columns ?? 80) - 6
     // The summary pill leads the row, as plan-progress's bar does: state, count, percent; its fill is the share of agents done.
+    // Raster cells hold one-column characters only, so its words are ASCII.
     const doneCount = done.length
     const isAllDone = active.length === 0
     const pct = isAllDone ? 100 : Math.round((doneCount / chips.length) * 100)
     const label = isAllDone
       ? `✓ Done ${doneCount}/${chips.length}  100%`
-      : `● 進行中 ${doneCount}/${chips.length}  ${String(pct)}%`
-    const summaryW = Math.max(18, cells(label) + 2)
-    const summary = fit(label, summaryW)
-    const [filledText, restText] = split(summary, isAllDone ? summaryW : Math.round(summaryW * (doneCount / chips.length)))
+      : `● ${doneCount}/${chips.length}  ${String(pct)}%`
+    const summaryW = Math.max(24, label.length + 6)
+    const target = (isAllDone ? 1 : doneCount / chips.length) * summaryW
+
+    head = isAllDone || Math.abs(target - head) < 0.05 ? target : head + (target - head) * 0.35
+
+    const [filledText, restText] = split(fit(label, summaryW), Math.round(target))
+    const summary =
+      Raster === null ? (
+        <Box>
+          {filledText === '' ? null : <Text backgroundColor={GREEN}>{filledText}</Text>}
+          {restText === '' ? null : <Text backgroundColor={EMPTY}>{restText}</Text>}
+        </Box>
+      ) : (
+        <Raster
+          key="summary"
+          columns={summaryW}
+          rows={1}
+          cells={trackCells({ width: summaryW, head, label, isDone: isAllDone, now, isTwinkling })}
+        />
+      )
     const total = row - summaryW - 1
     const share = Math.floor((total - (chips.length - 1)) / chips.length)
     const width = Math.max(8, Math.min(Math.floor(row / 2), share))
@@ -207,8 +252,7 @@ export const register: Register = on => {
 
     return (
       <Box>
-        {filledText === '' ? null : <Text backgroundColor={GREEN}>{filledText}</Text>}
-        {restText === '' ? null : <Text backgroundColor={EMPTY}>{restText}</Text>}
+        {summary}
         {chips.map((c, i) => {
           const gap = <Text> </Text>
 
