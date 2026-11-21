@@ -16,6 +16,8 @@ export const FIGURE_SPACE = String.fromCharCode(0x2007)
 // shouts louder than another, and white on each reads at 4.5:1 or better
 export const STATE_COLOR: Record<PlanState, string> = { running: '#7858CA', needs_input: '#AD6400', error: '#C5353E', done: '#18883A' }
 export const INK = '#FFFFFF'
+export const hex = (h: string) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16))
+export const rgb = (c: number[]) => `rgb(${c.join(',')})`
 export const STATE_GLYPH: Record<PlanState, string> = { running: '●', needs_input: '?', error: '!', done: '✓' }
 export const STATUSES: StepStatus[] = ['pending', 'active', 'done', 'error', 'skipped']
 
