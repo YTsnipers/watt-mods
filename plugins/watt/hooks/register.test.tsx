@@ -247,7 +247,7 @@ const SETTINGS = {
   },
 } as const
 
-test('the settings window lists four choices and a press changes one', async ($, on) => {
+test('the settings window lists six choices and a press changes one', async ($, on) => {
   const set: Array<{ key: string; value: unknown }> = []
 
   on('config.set', (_, e) => {
@@ -263,7 +263,7 @@ test('the settings window lists four choices and a press changes one', async ($,
 
   const ui = await $.ui.mount(SETTINGS as never)
 
-  expect(await ui.findAll({ type: 'Button' })).toHaveLength(4)
+  expect(await ui.findAll({ type: 'Button' })).toHaveLength(6)
   expect((await ui.find({ key: 'sounds' }))?.text).toMatch(/\[x\] Sounds/)
 
   await ui.press({ key: 'sounds' })
@@ -271,6 +271,37 @@ test('the settings window lists four choices and a press changes one', async ($,
   // The mod runs apart from the test, so what it did shows in what it asked of the engine.
   expect(set).toEqual([{ key: 'watt.sounds', value: false }])
   expect((await ui.find({ key: 'sounds' }))?.text).toMatch(/\[ \] Sounds/)
+  await ui.unmount()
+})
+
+test('the settings window turns on closing finished bars and cycles how long they stay', async ($, on) => {
+  const set: Array<{ key: string; value: unknown }> = []
+
+  on('config.set', (_, e) => {
+    set.push({ key: e.key, value: e.value })
+
+    return { value: e.value }
+  })
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+
+    return <Text>engine</Text>
+  })
+
+  const ui = await $.ui.mount(SETTINGS as never)
+
+  expect((await ui.find({ key: 'autoclose' }))?.text).toMatch(/\[ \] Close finished progress bars/)
+  expect((await ui.find({ key: 'doneBarSeconds' }))?.text).toMatch(/stay: 30 s \(press for 60 s\)/)
+
+  await ui.press({ key: 'autoclose' })
+  await ui.press({ key: 'doneBarSeconds' })
+
+  expect(set).toEqual([
+    { key: 'watt.autoclose', value: true },
+    { key: 'watt.doneBarSeconds', value: 60 },
+  ])
+  expect((await ui.find({ key: 'autoclose' }))?.text).toMatch(/\[x\] Close finished progress bars/)
+  expect((await ui.find({ key: 'doneBarSeconds' }))?.text).toMatch(/stay: 60 s \(press for 10 s\)/)
   await ui.unmount()
 })
 

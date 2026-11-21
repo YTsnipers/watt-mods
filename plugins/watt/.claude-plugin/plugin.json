@@ -29,6 +29,19 @@
       "title": "Show the model on each chip",
       "description": "The model each subagent runs on, dimmed beside its time; dropped first when a chip is narrow",
       "default": true
+    },
+    "autoclose": {
+      "type": "boolean",
+      "title": "Close finished progress bars on their own",
+      "description": "A finished bar leaves the progress bars above the prompt after the seconds below. Off, it stays until closed; a failed bar or one waiting on you always stays",
+      "default": false
+    },
+    "doneBarSeconds": {
+      "type": "number",
+      "title": "Finished bar stays (seconds)",
+      "description": "Seconds a finished progress bar stays above the prompt while closing finished bars on their own is on",
+      "default": 30,
+      "min": 1
     }
   }
 }

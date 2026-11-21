@@ -1,6 +1,13 @@
 export type Durations = Record<string, number>
 
-export type Choices = { twinkle: boolean; sounds: boolean; showModel: boolean; keepSeconds: number }
+export type Choices = {
+  twinkle: boolean
+  sounds: boolean
+  showModel: boolean
+  keepSeconds: number
+  autoclose: boolean
+  doneBarSeconds: number
+}
 
 // The progress bars (ported from plan-progress, MIT, Kirill Serditov).
 export type StepStatus = 'pending' | 'active' | 'done' | 'error' | 'skipped'

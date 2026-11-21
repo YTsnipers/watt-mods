@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Choices } from '../types'
-import { KEEP_CHOICES, prefs } from './prefs'
+import { DONE_CHOICES, KEEP_CHOICES, prefs } from './prefs'
 
 const PANE = 'watt-settings'
 
@@ -12,6 +12,8 @@ const shown = atom({ plugin: 'watt', key: 'choices' } as const, {
   sounds: true,
   showModel: true,
   keepSeconds: 20,
+  autoclose: false,
+  doneBarSeconds: 30,
 } as Choices)
 
 const snapshot = (): Choices => ({
@@ -19,6 +21,8 @@ const snapshot = (): Choices => ({
   sounds: prefs.isSoundOn,
   showModel: prefs.isModelShown,
   keepSeconds: Math.round(prefs.keepMs / 1000),
+  autoclose: prefs.isAutoClose,
+  doneBarSeconds: Math.round(prefs.doneBarMs / 1000),
 })
 
 type Field = keyof Choices
@@ -29,6 +33,8 @@ async function choose($: EngineInterface, field: Field, value: boolean | number)
   if (field === 'sounds') prefs.isSoundOn = value === true
   if (field === 'showModel') prefs.isModelShown = value === true
   if (field === 'keepSeconds') prefs.keepMs = Number(value) * 1000
+  if (field === 'autoclose') prefs.isAutoClose = value === true
+  if (field === 'doneBarSeconds') prefs.doneBarMs = Number(value) * 1000
 
   await $.config.set({ key: `watt.${field}`, value }).catch(() => undefined)
   await update($, shown, () => snapshot())
@@ -37,7 +43,7 @@ async function choose($: EngineInterface, field: Field, value: boolean | number)
 
 // Run from the plugin's one `session.start` hook (a module may hook an event without a matcher only once).
 export async function startSettings($: EngineInterface): Promise<void> {
-  await $.command.register({ name: 'watt-settings', description: 'Open the settings of watt: twinkle, sounds, model, how long finished agents stay' })
+  await $.command.register({ name: 'watt-settings', description: 'Open the settings of watt: twinkle, sounds, model, how long finished agents and progress bars stay' })
   await update($, shown, () => snapshot())
 }
 
@@ -52,11 +58,12 @@ export const register: Register = on => {
     const { Box, Button, Text } = $.ui.resolve(e)
     const c = await read($, shown)
     const next = KEEP_CHOICES[(KEEP_CHOICES.indexOf(c.keepSeconds) + 1) % KEEP_CHOICES.length] ?? 20
+    const nextDone = DONE_CHOICES[(DONE_CHOICES.indexOf(c.doneBarSeconds) + 1) % DONE_CHOICES.length] ?? 30
     const mark = (isOn: boolean): string => (isOn ? '[x]' : '[ ]')
 
     return (
       <Box flexDirection="column">
-        <Text dimColor>Agent strips: what you see under the prompt while subagents run.</Text>
+        <Text dimColor>What you see of subagents (chips under the prompt), the progress bars above it, and the sounds.</Text>
         <Button key="twinkle" plain onPress={() => choose($, 'twinkle', !c.twinkle)}>
           {mark(c.twinkle)} Twinkle the pixel fill
         </Button>
@@ -68,6 +75,12 @@ export const register: Register = on => {
         </Button>
         <Button key="keepSeconds" plain onPress={() => choose($, 'keepSeconds', next)}>
           Finished agents stay: {c.keepSeconds} s (press for {next} s)
+        </Button>
+        <Button key="autoclose" plain onPress={() => choose($, 'autoclose', !c.autoclose)}>
+          {mark(c.autoclose)} Close finished progress bars on their own
+        </Button>
+        <Button key="doneBarSeconds" plain onPress={() => choose($, 'doneBarSeconds', nextDone)}>
+          Finished progress bars stay: {c.doneBarSeconds} s (press for {nextDone} s)
         </Button>
       </Box>
     )
