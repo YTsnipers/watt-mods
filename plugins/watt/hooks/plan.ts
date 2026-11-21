@@ -12,9 +12,9 @@ export const MAX_BARS = 3
 // a space as wide as a digit, so '  0%' and '100%' take the same room
 export const FIGURE_SPACE = String.fromCharCode(0x2007)
 
-// one lightness for every state (OKLCH L .55, hues of the desktop's violet, amber, red and green), so no state
-// shouts louder than another, and white on each reads at 4.5:1 or better
-export const STATE_COLOR: Record<PlanState, string> = { running: '#7858CA', needs_input: '#AD6400', error: '#C5353E', done: '#18883A' }
+// watt's chip colours: Claude's orange while running, blue while waiting on the person, then red or green; the
+// words on each are picked to read at 4.5:1 or better (draw.test.ts holds them to it)
+export const STATE_COLOR: Record<PlanState, string> = { running: '#D97757', needs_input: '#608CE0', error: '#C5353E', done: '#18883A' }
 export const INK = '#FFFFFF'
 export const hex = (h: string) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16))
 export const rgb = (c: number[]) => `rgb(${c.join(',')})`
