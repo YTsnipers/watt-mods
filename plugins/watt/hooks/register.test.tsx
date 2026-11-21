@@ -278,6 +278,16 @@ test('agents that ran together end with the error sound when one failed, even th
   expect(played).toEqual(['sounds/error.wav'])
 })
 
+test('the turn line measures the context against the model window', async ($, on) => {
+  on('audio.play', () => ({ value: undefined }))
+  on('session.usage', () => ({ value: { context: { tokens: 100_000, window: 200_000, percent: 50 }, rateLimits: [] } as never }))
+  on('turn.complete', () => ({ text: '' }))
+
+  const out = (await $.turn.complete(ended('answer', 1_000))) as { text?: string }
+
+  expect(out.text).toContain('context 50.0%')
+})
+
 test('the terminal is light when the theme says so', () => {
   setThemeSetting('light')
   expect(isLight()).toBe(true)

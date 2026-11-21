@@ -20,7 +20,6 @@ import { register as registerSettings } from './settings'
 const durations = atom({ plugin: 'watt', key: 'durations' } as const, {} as Durations)
 
 const KEEP = 400
-const CONTEXT_WINDOW = 1_000_000
 // A main-loop turn at least this long ends with a sound: the person has likely looked away and now takes over.
 const HANDOFF_MS = 30_000
 
@@ -210,7 +209,8 @@ export const register: Register = (on, options) => {
     const cache = u && prompt > 0 ? `, cache hit ${Math.round((u.cache_read_input_tokens / prompt) * 100)}%` : ''
 
     const { context, rateLimits } = await $.session.usage()
-    const ctx = context.tokens === undefined ? '' : `, context ${((context.tokens / CONTEXT_WINDOW) * 100).toFixed(1)}%`
+    // measured against the session model's own window, 200k or 1M
+    const ctx = context.tokens === undefined || !context.window ? '' : `, context ${((context.tokens / context.window) * 100).toFixed(1)}%`
     const fiveHour = rateLimits.find(r => r.kind === 'five_hour')
     const usage = fiveHour ? `, usage ${fiveHour.percentUsed}%` : ''
 
