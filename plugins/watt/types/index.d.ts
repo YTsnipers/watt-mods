@@ -1,5 +1,8 @@
 export type Durations = Record<string, number>
 
+// a main turn's context (of the model window) and five-hour usage, in percent, found again by the turn's length
+export type TurnStat = { durationMs: number; context?: number; usage?: number }
+
 export type Choices = {
   twinkle: boolean
   sounds: boolean
@@ -34,6 +37,7 @@ declare module 'claude-code' {
   interface PluginState {
     'watt': {
       durations: Durations
+      turnStats: TurnStat[]
       choices: Choices
       plans: Plan[]
       isOpen: boolean

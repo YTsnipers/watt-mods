@@ -4,6 +4,7 @@ import type { Engine } from 'claude-code/testing'
 
 import { chipCells, contrast, trackCells } from './raster'
 import { isLight, setThemeSetting } from './tint'
+import { MARKS, tintOf } from './turnline'
 
 const ROW = {
   plugin: 'watt',
@@ -278,14 +279,82 @@ test('agents that ran together end with the error sound when one failed, even th
   expect(played).toEqual(['sounds/error.wav'])
 })
 
-test('the turn line measures the context against the model window', async ($, on) => {
+const DURATION = { plugin: 'watt', component: 'TurnDuration', requestId: 'turn-1' } as const
+
+// session.usage: the context as a share of the model window, and the five-hour limit used
+const usageIs = (on: On, context: number, fiveHour: number) =>
+  on('session.usage', () => ({
+    value: { context: { tokens: context * 2_000, window: 200_000 }, rateLimits: [{ kind: 'five_hour', percentUsed: fiveHour }] } as never,
+  }))
+
+// a state that keeps what is set, so turn.complete's write reaches the duration line's read
+const keptState = (on: On) => {
+  const kept = new Map<string, { value: unknown; version: number }>()
+  const at = (e: { plugin: string; key: string; id?: string }) => `${e.plugin}/${e.key}/${e.id ?? ''}`
+
+  on('state.get', (_, e) => ({ value: (kept.get(at(e)) ?? { value: undefined, version: 0 }) as never }))
+  on('state.set', (_, e) => {
+    const version = (kept.get(at(e))?.version ?? 0) + 1
+
+    kept.set(at(e), { value: e.value, version })
+
+    return { value: { isSet: true, version } }
+  })
+}
+
+const engineDurationLine = (on: On) =>
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+
+    return <Text>Baked for 9s</Text>
+  })
+
+test('context and usage leave the turn line for the duration line, measured against the model window', async ($, on) => {
   on('audio.play', () => ({ value: undefined }))
-  on('session.usage', () => ({ value: { context: { tokens: 100_000, window: 200_000, percent: 50 }, rateLimits: [] } as never }))
+  usageIs(on, 50, 70)
+  keptState(on)
   on('turn.complete', () => ({ text: '' }))
+  engineDurationLine(on)
 
-  const out = (await $.turn.complete(ended('answer', 1_000))) as { text?: string }
+  const out = (await $.turn.complete(ended('answer', 9_520))) as { text?: string }
 
-  expect(out.text).toContain('context 50.0%')
+  expect(out.text).toContain('This turn:')
+  expect(out.text).not.toContain('context')
+  expect(out.text).not.toContain('usage')
+
+  const ui = await $.ui.mount({ ...DURATION, surface: 'terminal', props: { word: 'Baked', durationMs: 9_520 } })
+
+  expect(await ui.find({ type: 'Text', text: 'Baked for 9s' })).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: /^context 50\.0%$/ }))?.props.color).toBe('#C5353E')
+  expect((await ui.find({ type: 'Text', text: /^usage 70%$/ }))?.props.color).toBe('#D97757')
+  await ui.unmount()
+})
+
+test('below their marks the numbers stay dim, and a duration line no turn matches is left as the engine drew it', async ($, on) => {
+  on('audio.play', () => ({ value: undefined }))
+  usageIs(on, 20, 10)
+  keptState(on)
+  on('turn.complete', () => ({ text: '' }))
+  engineDurationLine(on)
+
+  await $.turn.complete(ended('answer', 9_520))
+
+  const matched = await $.ui.mount({ ...DURATION, surface: 'terminal', props: { word: 'Baked', durationMs: 10_400 } })
+  const context = await matched.find({ type: 'Text', text: /^context 20\.0%$/ })
+
+  expect(context?.props.color).toBeUndefined()
+  expect(context?.props.dimColor).toBe(true)
+  await matched.unmount()
+
+  const other = await $.ui.mount({ ...DURATION, requestId: 'turn-2', surface: 'terminal', props: { word: 'Baked', durationMs: 60_000 } })
+
+  expect(await other.find({ type: 'Text', text: /context/ })).toBeUndefined()
+  await other.unmount()
+})
+
+test('each number turns orange and red at its own marks', () => {
+  expect([24.9, 25, 34.9, 35].map(v => tintOf(v, MARKS.context))).toEqual([undefined, '#D97757', '#D97757', '#C5353E'])
+  expect([59, 60, 79, 80].map(v => tintOf(v, MARKS.usage))).toEqual([undefined, '#D97757', '#D97757', '#C5353E'])
 })
 
 test('the terminal is light when the theme says so', () => {

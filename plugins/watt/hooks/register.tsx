@@ -16,6 +16,7 @@ import {
   waitingIds,
 } from './bars'
 import { register as registerSettings } from './settings'
+import { recordTurn, register as registerTurnline } from './turnline'
 
 const durations = atom({ plugin: 'watt', key: 'durations' } as const, {} as Durations)
 
@@ -81,6 +82,7 @@ export const register: Register = (on, options) => {
   registerAgents(on, options)
   registerSettings(on, options)
   registerBars(on, options)
+  registerTurnline(on, options)
 
   on('turn.start', async ($, e, next) => {
     if (e.agentId === undefined) {
@@ -209,14 +211,17 @@ export const register: Register = (on, options) => {
     const cache = u && prompt > 0 ? `, cache hit ${Math.round((u.cache_read_input_tokens / prompt) * 100)}%` : ''
 
     const { context, rateLimits } = await $.session.usage()
-    // measured against the session model's own window, 200k or 1M
-    const ctx = context.tokens === undefined || !context.window ? '' : `, context ${((context.tokens / context.window) * 100).toFixed(1)}%`
-    const fiveHour = rateLimits.find(r => r.kind === 'five_hour')
-    const usage = fiveHour ? `, usage ${fiveHour.percentUsed}%` : ''
+    // measured against the session model's own window, 200k or 1M; drawn coloured after the duration line (turnline.tsx),
+    // since this text is the engine's to draw and takes no colour
+    await recordTurn($, {
+      durationMs: e.durationMs,
+      context: context.tokens === undefined || !context.window ? undefined : (context.tokens / context.window) * 100,
+      usage: rateLimits.find(r => r.kind === 'five_hour')?.percentUsed,
+    })
 
     return {
       ...out,
-      text: `This turn: ${turn.calls} ${noun}, model ${seconds(turn.modelMs)}, tools ${seconds(unionMs(turn.spans))}${cache}${ctx}${usage}`,
+      text: `This turn: ${turn.calls} ${noun}, model ${seconds(turn.modelMs)}, tools ${seconds(unionMs(turn.spans))}${cache}`,
     }
   })
 
