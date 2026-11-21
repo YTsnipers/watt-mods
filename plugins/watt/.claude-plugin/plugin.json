@@ -1,7 +1,7 @@
 {
   "name": "watt",
   "version": "0.1.0",
-  "description": "Shows how long each tool call took, and per turn: tool call count, time waiting on the model, time running commands.",
+  "description": "Shows how long each tool call took and a summary of each turn, a chip for each running subagent, and live plan progress bars above the prompt (the plan_progress tool, ported from plan-progress), with soft sounds when work ends, fails or waits for you.",
   "types": "./types/index.d.ts",
   "license": "MIT",
   "userConfig": {
@@ -21,7 +21,7 @@
     "sounds": {
       "type": "boolean",
       "title": "Play a sound when work ends",
-      "description": "A soft sound when a main turn of 30s or more ends and when all running subagents finish, the error one when it failed; the decision one when Claude stops to ask you",
+      "description": "A soft sound when a main turn of 30s or more ends, when all running subagents finish, and when a progress bar finishes or fails, the error one when it failed; the decision one when Claude stops to ask you or a bar waits for you",
       "default": true
     },
     "showModel": {
