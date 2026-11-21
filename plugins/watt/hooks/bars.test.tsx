@@ -211,6 +211,18 @@ test('the turn-end sound is skipped when a bar chimed during that turn, and play
   expect(played).toEqual([DONE])
 })
 
+test('a bar set waiting chimes for the question; once the person answers, the work after it ends with its own sound', async ($, on) => {
+  const { played } = world(on)
+
+  await $.turn.start({ turnId: 't1' } as never)
+  await create($, 'answer-bar')
+  await step($, 'answer-bar', { state: 'needs_input', note: 'which branch?' })
+  await $.tool.call({ tool: 'AskUserQuestion', questions: [] } as never)
+  await $.turn.complete({ answer: '', durationMs: 45_000, isAborted: false, turnId: 't1', reason: 'answer' } as never)
+
+  expect(played).toEqual([DECISION, DONE])
+})
+
 test('a plan the person approves lands on the bar `plan`; Claude is told, and one decision sound plays', async ($, on) => {
   const { played } = world(on, () => ({ plan: '# Fix login\n\n## Analyse\n- Read code\n- Find bug\n## Fix\n- Patch\n- Test' }))
   const out = await $.tool.call({ tool: 'ExitPlanMode' } as never)

@@ -119,6 +119,8 @@ export const register: Register = (on, options) => {
     } finally {
       turn.waitMs += (await $.clock.now()) - askedAt
       await closeQuestion($, question).catch(() => undefined)
+      // the person answered: a chime before this was about the question, and the work after it ends with its own sound
+      chimed.inTurn = false
     }
   })
 
@@ -141,6 +143,7 @@ export const register: Register = (on, options) => {
     } finally {
       turn.waitMs += (await $.clock.now()) - askedAt
       await answerPlan($, asked).catch(() => undefined)
+      chimed.inTurn = false
     }
 
     if (ran.deny !== undefined || ran.isError === true) {
