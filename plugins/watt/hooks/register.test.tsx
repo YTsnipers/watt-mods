@@ -346,7 +346,7 @@ test('the time spent waiting on an answer does not count toward the 30s', async 
     return { result: {} }
   })
 
-  on('turn.start', () => ({}))
+  on('turn.start', (_, e) => ({ turnId: e.turnId }))
 
   await $.turn.start({ turnId: 't1' } as never)
   await $.tool.call({ tool: 'AskUserQuestion', questions: [] } as never)
