@@ -3,7 +3,18 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Durations } from '../types'
 import { register as registerAgents } from './agents'
-import { prefs } from './prefs'
+import {
+  answerPlan,
+  chimed,
+  closeQuestion,
+  openQuestion,
+  planApproved,
+  play,
+  register as registerBars,
+  turnFinished,
+  turnStarted,
+  waitingIds,
+} from './bars'
 import { register as registerSettings } from './settings'
 
 const durations = atom({ plugin: 'watt', key: 'durations' } as const, {} as Durations)
@@ -70,8 +81,9 @@ async function record(
 export const register: Register = (on, options) => {
   registerAgents(on, options)
   registerSettings(on, options)
+  registerBars(on, options)
 
-  on('turn.start', ($, e, next) => {
+  on('turn.start', async ($, e, next) => {
     if (e.agentId === undefined) {
       turn.modelMs = 0
       turn.calls = 0
@@ -79,30 +91,67 @@ export const register: Register = (on, options) => {
       turn.waitMs = 0
     }
 
+    // the bars' side never costs the turn its own bookkeeping
+    await turnStarted($, e.agentId === undefined).catch(() => undefined)
+
     return next(e)
   })
 
-  // Claude stops mid-turn to ask the person (a question, a plan to approve): the decision sound at once. A subagent's
-  // question goes to Claude, not to the person.
-  for (const tool of ['AskUserQuestion', 'ExitPlanMode'] as const) {
-    on('tool.call', { tool }, async ($, e, next) => {
-      if (e.agentId !== undefined) {
-        return next(e)
-      }
+  // Claude stops mid-turn to ask the person (a question, a plan to approve): the decision sound at once, and the one
+  // sound of that moment: a bar Claude already set waiting through plan_progress chimed when it turned, so it is not
+  // played again. A subagent's question goes to Claude, not to the person.
+  on('tool.call', { tool: 'AskUserQuestion' }, async ($, e, next) => {
+    if (e.agentId !== undefined) {
+      return next(e)
+    }
 
-      if (prefs.isSoundOn) {
-        void $.audio.play({ asset: 'sounds/decision.wav' }).catch(() => undefined)
-      }
+    // the bar side: the bar set waiting is the one asked about, else the latest at work turns amber
+    const question = await openQuestion($).catch(() => ({ asked: [], live: undefined }))
 
-      const askedAt = await $.clock.now()
+    if (question.asked.length === 0) {
+      play($, 'decision')
+    }
 
-      try {
-        return await next(e)
-      } finally {
-        turn.waitMs += (await $.clock.now()) - askedAt
-      }
-    })
-  }
+    const askedAt = await $.clock.now()
+
+    try {
+      return await next(e)
+    } finally {
+      turn.waitMs += (await $.clock.now()) - askedAt
+      await closeQuestion($, question).catch(() => undefined)
+    }
+  })
+
+  on('tool.call', { tool: 'ExitPlanMode' }, async ($, e, next) => {
+    if (e.agentId !== undefined) {
+      return next(e)
+    }
+
+    const asked = await waitingIds($).catch(() => [])
+
+    if (asked.length === 0) {
+      play($, 'decision')
+    }
+
+    const askedAt = await $.clock.now()
+    let ran: Awaited<ReturnType<typeof next>>
+
+    try {
+      ran = await next(e)
+    } finally {
+      turn.waitMs += (await $.clock.now()) - askedAt
+      await answerPlan($, asked).catch(() => undefined)
+    }
+
+    if (ran.deny !== undefined || ran.isError === true) {
+      return ran
+    }
+
+    // the approved plan lands on the bar `plan`; Claude is told which bar holds it
+    const note = await planApproved($, (ran.result as { plan?: unknown } | undefined)?.plan).catch(() => undefined)
+
+    return note === undefined ? ran : { ...ran, context: [...(ran.context ?? []), note] }
+  })
 
   on('turn.step', async function* ($, e, next) {
     if (e.agentId !== undefined) {
@@ -133,6 +182,9 @@ export const register: Register = (on, options) => {
   })
 
   on('turn.complete', async ($, e, next) => {
+    // the bars first: one that finishes with the turn may chime, and the turn's own sound then stays quiet
+    await turnFinished($, e.agentId).catch(() => undefined)
+
     const out = await next(e)
 
     if (e.agentId !== undefined) {
@@ -140,11 +192,14 @@ export const register: Register = (on, options) => {
     }
 
     // Done when it answered, error when an API error or a refusal ended it; an interrupt is the person already there.
+    // A bar that chimed (done, error, a question at the end) during this turn already told the person: one sound.
     const sound = e.reason === 'answer' ? 'done' : e.reason === 'aborted' ? undefined : 'error'
 
-    if (prefs.isSoundOn && sound !== undefined && e.durationMs - turn.waitMs >= HANDOFF_MS) {
-      void $.audio.play({ asset: `sounds/${sound}.wav` }).catch(() => undefined)
+    if (sound !== undefined && !chimed.inTurn && e.durationMs - turn.waitMs >= HANDOFF_MS) {
+      play($, sound)
     }
+
+    chimed.inTurn = false
 
     const noun = turn.calls === 1 ? 'tool call' : 'tool calls'
     const u = e.usage

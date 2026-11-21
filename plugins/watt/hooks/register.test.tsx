@@ -1,3 +1,4 @@
+import type { On } from 'claude-code'
 import { expect, test } from 'claude-code/testing'
 
 import { chipCells, contrast, trackCells } from './raster'
@@ -319,7 +320,7 @@ test('a chip shows its model while the name is cut to make room, and drops it on
 const ended = (reason: 'answer' | 'aborted' | 'error', durationMs: number, agentId?: string) =>
   ({ answer: '', durationMs, isAborted: reason === 'aborted', turnId: 't1', reason, ...(agentId ? { agentId } : {}) }) as never
 
-const hearTurns = (on: Parameters<Parameters<typeof test>[1]>[1]): string[] => {
+const hearTurns = (on: On): string[] => {
   const played: string[] = []
 
   on('audio.play', (_, e) => {

@@ -1,5 +1,6 @@
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
+import { startBars } from './bars'
 import { loadPrefs, prefs } from './prefs'
 import { chipCells, chipTint, hexOf, trackCells } from './raster'
 import { startSettings } from './settings'
@@ -201,6 +202,7 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     await loadThemeSetting($)
     await startSettings($)
+    await startBars($)
 
     return next(e)
   })

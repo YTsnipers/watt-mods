@@ -7,7 +7,7 @@
 import type { Plan, PlanStage, PlanState, PlanStep, StepStatus } from '../types'
 
 // the tool as the session lists it: mcp__<plugin>__<name>, the plugin being watt
-export const TOOL = 'mcp__watt__plan_progress'
+export const TOOL: string = 'mcp__watt__plan_progress'
 export const MAX_BARS = 3
 // a space as wide as a digit, so '  0%' and '100%' take the same room
 export const FIGURE_SPACE = String.fromCharCode(0x2007)
