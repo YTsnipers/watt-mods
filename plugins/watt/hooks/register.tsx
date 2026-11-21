@@ -36,7 +36,8 @@ const unionMs = (spans: Span[]): number => {
   return total + (to - from)
 }
 
-const turn = { modelMs: 0, calls: 0, spans: [] as Span[] }
+// waitMs: the part of the turn spent waiting on the person's answer, which the 30s of HANDOFF_MS leaves out.
+const turn = { modelMs: 0, calls: 0, spans: [] as Span[], waitMs: 0 }
 
 async function record(
   $: EngineInterface,
@@ -75,10 +76,33 @@ export const register: Register = (on, options) => {
       turn.modelMs = 0
       turn.calls = 0
       turn.spans = []
+      turn.waitMs = 0
     }
 
     return next(e)
   })
+
+  // Claude stops mid-turn to ask the person (a question, a plan to approve): the decision sound at once. A subagent's
+  // question goes to Claude, not to the person.
+  for (const tool of ['AskUserQuestion', 'ExitPlanMode'] as const) {
+    on('tool.call', { tool }, async ($, e, next) => {
+      if (e.agentId !== undefined) {
+        return next(e)
+      }
+
+      if (prefs.isSoundOn) {
+        void $.audio.play({ asset: 'sounds/decision.wav' }).catch(() => undefined)
+      }
+
+      const askedAt = await $.clock.now()
+
+      try {
+        return await next(e)
+      } finally {
+        turn.waitMs += (await $.clock.now()) - askedAt
+      }
+    })
+  }
 
   on('turn.step', async function* ($, e, next) {
     if (e.agentId !== undefined) {
@@ -118,7 +142,7 @@ export const register: Register = (on, options) => {
     // Done when it answered, error when an API error or a refusal ended it; an interrupt is the person already there.
     const sound = e.reason === 'answer' ? 'done' : e.reason === 'aborted' ? undefined : 'error'
 
-    if (prefs.isSoundOn && sound !== undefined && e.durationMs >= HANDOFF_MS) {
+    if (prefs.isSoundOn && sound !== undefined && e.durationMs - turn.waitMs >= HANDOFF_MS) {
       void $.audio.play({ asset: `sounds/${sound}.wav` }).catch(() => undefined)
     }
 

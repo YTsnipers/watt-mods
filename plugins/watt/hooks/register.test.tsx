@@ -321,3 +321,37 @@ test('with sounds off, a long turn ends quietly', { options: { sounds: false } }
 
   expect(played).toEqual([])
 })
+
+test('Claude asking mid-turn plays the decision sound at once; a subagent asking does not', async ($, on) => {
+  const played = hearTurns(on)
+
+  on('clock.now', () => ({ value: 0 }))
+  on('tool.call', () => ({ result: {} }))
+
+  await $.tool.call({ tool: 'AskUserQuestion', questions: [] } as never)
+  await $.tool.call({ tool: 'ExitPlanMode' } as never)
+  await $.tool.call({ tool: 'AskUserQuestion', questions: [], agentId: 'a1' } as never)
+
+  expect(played).toEqual(['sounds/decision.wav', 'sounds/decision.wav'])
+})
+
+test('the time spent waiting on an answer does not count toward the 30s', async ($, on) => {
+  const played = hearTurns(on)
+  let now = 0
+
+  on('clock.now', () => ({ value: now }))
+  on('tool.call', () => {
+    now += 60_000
+
+    return { result: {} }
+  })
+
+  on('turn.start', () => ({}))
+
+  await $.turn.start({ turnId: 't1' } as never)
+  await $.tool.call({ tool: 'AskUserQuestion', questions: [] } as never)
+  // 70s in all, 60s of it the person answering: 10s of work, no sound at the end.
+  await $.turn.complete(ended('answer', 70_000))
+
+  expect(played).toEqual(['sounds/decision.wav'])
+})

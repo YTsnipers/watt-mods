@@ -21,7 +21,7 @@
     "sounds": {
       "type": "boolean",
       "title": "Play a sound when work ends",
-      "description": "A soft sound when a main turn of 30s or more ends and when all running subagents finish; the error one when it failed",
+      "description": "A soft sound when a main turn of 30s or more ends and when all running subagents finish, the error one when it failed; the decision one when Claude stops to ask you",
       "default": true
     },
     "showModel": {
