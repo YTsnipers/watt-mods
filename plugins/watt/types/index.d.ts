@@ -1,7 +1,7 @@
 export type Durations = Record<string, number>
 
-// a main turn's context (of the model window) and five-hour usage, in percent, found again by the turn's length
-export type TurnStat = { durationMs: number; context?: number; usage?: number }
+// a main turn's summary, context (of the model window) and five-hour usage, in percent, found again by the turn's length
+export type TurnStat = { durationMs: number; summary?: string; context?: number; usage?: number }
 
 export type Choices = {
   twinkle: boolean

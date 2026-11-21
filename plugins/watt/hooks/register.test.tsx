@@ -309,7 +309,7 @@ const engineDurationLine = (on: On) =>
     return <Text>Baked for 9s</Text>
   })
 
-test('context and usage leave the turn line for the duration line, measured against the model window', async ($, on) => {
+test('the turn summary leaves the engine text for a line under the duration line, its numbers against the model window', async ($, on) => {
   on('audio.play', () => ({ value: undefined }))
   usageIs(on, 50, 70)
   keptState(on)
@@ -318,13 +318,12 @@ test('context and usage leave the turn line for the duration line, measured agai
 
   const out = (await $.turn.complete(ended('answer', 9_520))) as { text?: string }
 
-  expect(out.text).toContain('This turn:')
-  expect(out.text).not.toContain('context')
-  expect(out.text).not.toContain('usage')
+  expect(out.text).toBe('')
 
   const ui = await $.ui.mount({ ...DURATION, surface: 'terminal', props: { word: 'Baked', durationMs: 9_520 } })
 
   expect(await ui.find({ type: 'Text', text: 'Baked for 9s' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^● watt: This turn: 0 tool calls, model 0\.0s, tools 0\.0s$/ })).toBeDefined()
   expect((await ui.find({ type: 'Text', text: /^context 50\.0%$/ }))?.props.color).toBe('#C5353E')
   expect((await ui.find({ type: 'Text', text: /^usage 70%$/ }))?.props.color).toBe('#D97757')
   await ui.unmount()

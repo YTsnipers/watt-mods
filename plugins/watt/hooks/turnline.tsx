@@ -1,7 +1,7 @@
-// The turn's context and usage, drawn after the engine's duration line (`✻ Baked for 3s`): the turn line beneath the
-// answer is a text the engine draws itself, which no hook can colour, so the two numbers live here instead. Each turns
-// orange, then red, at its own marks; below them it stays dim. The engine's line is kept as handed down (another plugin
-// may have coloured it), the numbers only follow it.
+// The turn's summary line, drawn under the engine's duration line (`✻ Baked for 3s`) with its context and usage: the
+// text turn.complete hands back is drawn by the engine itself and no hook can colour it, so watt draws the line here
+// instead. Each number turns orange, then red, at its own marks; below them it stays dim. The engine's duration line is
+// kept as handed down (another plugin may have coloured it).
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
@@ -27,7 +27,6 @@ export const tintOf = (value: number, marks: Marks): string | undefined =>
 
 // called from the main loop's turn.complete, which already read the session's usage
 export async function recordTurn($: EngineInterface, stat: TurnStat): Promise<void> {
-  if (stat.context === undefined && stat.usage === undefined) return
   await update($, turnStats, list => [...list, stat].slice(-KEEP))
 }
 
@@ -62,11 +61,26 @@ export const register: Register = on => {
       )
     }
 
+    // a turn recorded before the summary moved here keeps its numbers on the duration line
+    if (hit.summary === undefined) {
+      return (
+        <Box>
+          {row}
+          {part('context', hit.context, 1, MARKS.context)}
+          {part('usage', hit.usage, 0, MARKS.usage)}
+        </Box>
+      )
+    }
+
     return (
-      <Box>
+      <Box flexDirection="column">
         {row}
-        {part('context', hit.context, 1, MARKS.context)}
-        {part('usage', hit.usage, 0, MARKS.usage)}
+        <Text> </Text>
+        <Text>
+          <Text dimColor>{`● watt: ${hit.summary}`}</Text>
+          {part('context', hit.context, 1, MARKS.context)}
+          {part('usage', hit.usage, 0, MARKS.usage)}
+        </Text>
       </Box>
     )
   })
