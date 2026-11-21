@@ -65,12 +65,14 @@ export function applyOps(stages: PlanStage[], input: Raw, now: number): { stages
     return found
   }
   if (input.next === true) {
-    const at = steps.findIndex(st => st.status === 'active') >= 0 ? steps.findIndex(st => st.status === 'active') : steps.findIndex(st => !isFinished(st.status))
+    const at = steps.findIndex(st => st.status === 'active')
     const cur = steps[at]
     if (cur) finish(cur)
-    // past the last step, work goes back to one left open earlier; a call that names the new step itself picks it,
-    // so a step jumped over is not finished on the way
-    const following = steps.slice(at + 1).find(st => st.status === 'pending') ?? steps.find(st => st.status === 'pending')
+    // with nothing in progress (a step failed), work moves on past the failed step, which keeps its error: next
+    // finishes only the step in progress. Past the last step, work goes back to one left open earlier; a call that
+    // names the new step itself picks it, so a step jumped over is not finished on the way
+    const from = at >= 0 ? at : steps.findIndex(st => st.status === 'error')
+    const following = steps.slice(from + 1).find(st => st.status === 'pending') ?? steps.find(st => st.status === 'pending')
     if (following && typeof input.active !== 'string') following.status = 'active'
   }
   let lastDone = -1
@@ -132,7 +134,10 @@ export function normalize(input: Raw, prev: Plan | null, now: number, id: string
   const isAllDone = steps.length > 0 && steps.every(s => isFinished(s.status))
   const asked = input.state as PlanState
   const failedNow = typeof input.failed === 'string'
-  const state: PlanState = ['running', 'needs_input', 'error', 'done'].includes(asked) ? asked : isAllDone ? 'done' : failedNow ? 'error' : 'running'
+  // a failed step with nothing in progress is still the bar's state: work on another step turns it back to running,
+  // and once that is over the failure shows again
+  const isStuck = steps.some(s => s.status === 'error') && !steps.some(s => s.status === 'active')
+  const state: PlanState = ['running', 'needs_input', 'error', 'done'].includes(asked) ? asked : isAllDone ? 'done' : failedNow || isStuck ? 'error' : 'running'
 
   return {
     id,

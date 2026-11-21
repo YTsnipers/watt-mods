@@ -52,6 +52,27 @@ test('done and active name steps by title; finishing the active step moves on; f
   expect(f.note).toBe('tests red')
 })
 
+test('a failed step keeps its error: next starts the step after it, and the bar is failed again once nothing is in progress', () => {
+  const f = make({ failed: 'A' }, make(three()), 2_000)
+
+  expect(steps(f)).toBe('A:error B:pending C:pending')
+
+  const moved = make({ next: true }, f, 3_000)
+
+  expect(steps(moved)).toBe('A:error B:active C:pending')
+  expect(moved.state).toBe('running')
+
+  const rest = make({ done: ['B', 'C'] }, moved, 4_000)
+
+  expect(steps(rest)).toBe('A:error B:done C:done')
+  expect(rest.state).toBe('error')
+
+  const retried = make({ active: 'A' }, rest, 5_000)
+
+  expect(steps(retried)).toBe('A:active B:done C:done')
+  expect(retried.state).toBe('running')
+})
+
 test('a title the bar does not have is refused, listing the steps it does have', () => {
   const refused = normalize({ done: ['Z'] }, make(three()), 2_000, 't')
 
