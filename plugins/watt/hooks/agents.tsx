@@ -1,6 +1,6 @@
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
-import { startBars } from './bars'
+import { play, startBars } from './bars'
 import { loadPrefs, prefs } from './prefs'
 import { chipCells, chipTint, hexOf, trackCells } from './raster'
 import { startSettings } from './settings'
@@ -139,6 +139,9 @@ async function running($: EngineInterface): Promise<Chip[]> {
 
 const isOkTask = (taskStatus: string): boolean => taskStatus !== 'failed' && taskStatus !== 'killed'
 
+// a finished chip stays on screen for the chosen seconds after it ended
+const isKept = (c: Chip, now: number): boolean => now - (c.endAt ?? now) <= prefs.keepMs
+
 // Move every agent that was running and no longer is into `finished`; drop the expired and the closed.
 async function settle($: EngineInterface): Promise<Chip[]> {
   const now = await $.clock.now()
@@ -165,7 +168,7 @@ async function settle($: EngineInterface): Promise<Chip[]> {
   }
 
   for (const [id, chip] of finished) {
-    if (dismissed.has(id) || now - (chip.endAt ?? now) > prefs.keepMs) {
+    if (dismissed.has(id) || !isKept(chip, now)) {
       finished.delete(id)
       seen.delete(id)
     }
@@ -200,6 +203,14 @@ function sync($: EngineInterface): Promise<void> {
   return syncing
 }
 
+// The close button of a finished chip: it is never drawn again, and the row redraws without it.
+function dismiss($: EngineInterface, id: string): void {
+  dismissed.add(id)
+  finished.delete(id)
+  seen.delete(id)
+  void sync($)
+}
+
 // Redraw four times a second while any chip shows: the elapsed times and the animation move. Each tick also decides the
 // sounds: an agent stopped by TaskStop, or one that died, fires no SubagentStop, so the hooks alone would miss its end.
 async function syncOnce($: EngineInterface): Promise<void> {
@@ -210,10 +221,10 @@ async function syncOnce($: EngineInterface): Promise<void> {
   }
 
   // The last running agent just ended: one soft sound, the error one if any that ran with it failed.
-  if (prefs.isSoundOn && lastActive > 0 && active.length === 0 && finished.size > 0) {
+  if (lastActive > 0 && active.length === 0 && finished.size > 0) {
     const name = [...finished.values()].some(c => batch.has(c.id) && !c.isOk) ? 'error' : 'done'
 
-    void $.audio.play({ asset: `sounds/${name}.wav` }).catch(() => undefined)
+    play($, name)
   }
 
   if (active.length === 0) {
@@ -225,8 +236,8 @@ async function syncOnce($: EngineInterface): Promise<void> {
   // An agent that starts to wait on someone: the decision sound, once for each time it begins to.
   const nowWaiting = new Set(active.filter(c => c.isWaiting).map(c => c.id))
 
-  if (prefs.isSoundOn && [...nowWaiting].some(id => !waiting.has(id))) {
-    void $.audio.play({ asset: 'sounds/decision.wav' }).catch(() => undefined)
+  if ([...nowWaiting].some(id => !waiting.has(id))) {
+    play($, 'decision')
   }
 
   waiting = nowWaiting
@@ -292,7 +303,7 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'AgentRow' }, async ($, e, next) => {
     const active = await running($)
     const now = await $.clock.now()
-    const done = [...finished.values()].filter(c => !dismissed.has(c.id) && now - (c.endAt ?? now) <= prefs.keepMs)
+    const done = [...finished.values()].filter(c => !dismissed.has(c.id) && isKept(c, now))
     const chips = [...active, ...done]
     const lead = chips.find(c => e.props.rowIds.includes(c.id))
 
@@ -387,12 +398,7 @@ export const register: Register = (on, options) => {
                   <Button
                     plain
                     key={`${c.id}:close`}
-                    onPress={() => {
-                      dismissed.add(c.id)
-                      finished.delete(c.id)
-                      seen.delete(c.id)
-                      void sync($)
-                    }}
+                    onPress={() => dismiss($, c.id)}
                   >
                     <Text backgroundColor={hexOf(chipTint(state))}>{CLOSE}</Text>
                   </Button>
@@ -432,12 +438,7 @@ export const register: Register = (on, options) => {
               <Button
                 plain
                 key={`${c.id}:close`}
-                onPress={() => {
-                  dismissed.add(c.id)
-                  finished.delete(c.id)
-                  seen.delete(c.id)
-                  void sync($)
-                }}
+                onPress={() => dismiss($, c.id)}
               >
                 <Text backgroundColor={color}>{CLOSE}</Text>
               </Button>

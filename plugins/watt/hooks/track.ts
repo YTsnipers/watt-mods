@@ -9,7 +9,7 @@ import type { EngineInterface } from 'claude-code'
 import type { Plan } from '../types'
 import { STATE_COLOR, atHead, hex, pillStep } from './plan'
 import { prefs } from './prefs'
-import { BRAILLE_BITS, Grid, back, cellsOf, fitCells, hash, inkOn, mix, pack, pill, q, wave } from './raster'
+import { Grid, back, cellsOf, fitCells, inkOn, mix, pack, pill, pillX, twinkleFill } from './raster'
 import { isLight } from './tint'
 
 // a bar twinkles only while Claude works on it; one waiting on the person or left open after the turn stands still
@@ -53,35 +53,12 @@ export function barCells(p: Plan, W: number, t: number): string {
   const bg = back()
   const acc = hex(STATE_COLOR[p.state])
   const light = mix(acc, [255, 255, 255], 0.35)
-  const grey = [120, 118, 128]
   const track = mix(bg, [128, 128, 128], isLight() ? 0.14 : 0.18)
   const fill = mix(track, acc, done ? 0.3 : 0.17)
   const under = (x: number) => (x + 0.5 < fx ? fill : track)
   pill(g, 0, 0, W, under)
 
-  const TWINKLE = done ? [3200, 3800, 4400, 3500] : [2200, 2800, 1900, 3300]
-  const DELAY = [0, 700, 1300, 400]
-  const dim = done ? 0.2 : 0.55
-  for (let col = 0; col < Math.min(W, Math.ceil(fx)); col++) {
-    const u = Math.min(1, (col + 0.5) / Math.max(1, fx))
-    const dense = done ? 0.8 : 0.22 + 0.78 * Math.pow(u, 1.5)
-    let bits = 0
-    for (let r = 0; r < 4; r++) {
-      for (let c = 0; c < 2; c++) {
-        const sx = col * 2 + c
-        if (sx / 2 >= fx || hash(sx, r, 1) > dense * 0.6) continue
-        bits |= BRAILLE_BITS[r]?.[c] ?? 0
-      }
-    }
-    if (bits === 0) continue
-    const cls = Math.floor(hash(col, 0, 2) * 4)
-    const period = TWINKLE[cls] ?? 2200
-    const blink = 1 - dim * (prefs.isTwinkling ? wave(phase + (DELAY[cls] ?? 0), period, 0.25) : 0.5)
-    const bucket = done ? 1 : q(Math.min(1, Math.pow(u, 0.9) * 1.1))
-    const tone = mix(grey, light, bucket)
-    const opacity = (0.35 + 0.65 * dense) * blink
-    g.set(col, 0, 0x2800 + bits, pack(mix(fill, tone, q(opacity))), pack(fill))
-  }
+  twinkleFill(g, W, fx, done, fill, light, phase, prefs.isTwinkling)
 
   let k = 0
   p.stages.forEach(s => {
@@ -121,7 +98,7 @@ export function barCells(p: Plan, W: number, t: number): string {
   // the separator is the mark the pill stands on, as on the desktop: a stage's bar at its first step, a dot past it
   const tail = step ? ` ${w.step === 1 ? '│' : '•'} ${step}` : ''
   const kw = cellsOf(shown) + cellsOf(tail) + (count ? count.length + 1 : 0) + 2
-  const kx = Math.round(Math.max(0, Math.min(W - kw, fx - kw / 2)))
+  const kx = pillX(W, kw, fx)
   const white = pack(inkOn(color))
   pill(g, 0, kx, kx + kw, () => color)
   let at = kx + 1
@@ -233,13 +210,3 @@ export function landGlides(): void {
 // when the glides still under way are over, 0 with none
 export const glideSettleAt = (list: readonly Plan[]): number =>
   Math.max(0, ...list.map(p => glide.get(p.id)).map(g => (g && g.from !== g.to ? g.at + GLIDE_MS + 100 : 0)))
-
-export function forgetCells(id: string): void {
-  glide.delete(id)
-  stillPhase.delete(id)
-}
-
-export function keepCells(bars: ReadonlySet<string>): void {
-  for (const id of glide.keys()) if (!bars.has(id)) glide.delete(id)
-  for (const id of stillPhase.keys()) if (!bars.has(id)) stillPhase.delete(id)
-}

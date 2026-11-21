@@ -191,17 +191,9 @@ export type TrackArgs = {
   isTwinkling: boolean
 }
 
-// One row of cells: a track, a fill up to `head` with Braille dots that twinkle, and the label on a pill at the
-// head, as plan-progress draws a bar.
-export function trackCells({ width: W, head: fx, label, isDone, now, isTwinkling }: TrackArgs): string {
-  const g = new Grid(W, 1)
-  const acc = isDone ? FINISHED : RUNNING
-  const light = mix(acc, [255, 255, 255], 0.35)
-  const track = mix(back(), [128, 128, 128], isLight() ? 0.14 : 0.18)
-  const fill = mix(track, acc, isDone ? 0.3 : 0.17)
-
-  pill(g, 0, 0, W, x => (x + 0.5 < fx ? fill : track))
-
+// The fill's Braille dots up to the head `fx`, each column twinkling with its own period and delay; `time` is the
+// moment they twinkle at, and without `isTwinkling` they stand at half dim. `light` is the colour the dots brighten to.
+export function twinkleFill(g: Grid, W: number, fx: number, isDone: boolean, fill: number[], light: number[], time: number, isTwinkling: boolean): void {
   const twinkle = isDone ? [3200, 3800, 4400, 3500] : [2200, 2800, 1900, 3300]
   const delay = [0, 700, 1300, 400]
   const dim = isDone ? 0.2 : 0.55
@@ -228,16 +220,32 @@ export function trackCells({ width: W, head: fx, label, isDone, now, isTwinkling
     }
 
     const cls = Math.floor(hash(col, 0, 2) * 4)
-    const blink = 1 - dim * (isTwinkling ? wave(now + (delay[cls] ?? 0), twinkle[cls] ?? 2200, 0.25) : 0.5)
+    const blink = 1 - dim * (isTwinkling ? wave(time + (delay[cls] ?? 0), twinkle[cls] ?? 2200, 0.25) : 0.5)
     const tone = mix(GREY, light, isDone ? 1 : q(Math.min(1, Math.pow(u, 0.9) * 1.1)))
     const opacity = (0.35 + 0.65 * dense) * blink
 
     g.set(col, 0, 0x2800 + bits, pack(mix(fill, tone, q(opacity))), pack(fill))
   }
+}
+
+// where the label pill starts: its middle on the head `fx`, kept inside the `W` cells
+export const pillX = (W: number, kw: number, fx: number): number => Math.round(Math.max(0, Math.min(W - kw, fx - kw / 2)))
+
+// One row of cells: a track, a fill up to `head` with Braille dots that twinkle, and the label on a pill at the
+// head, as plan-progress draws a bar.
+export function trackCells({ width: W, head: fx, label, isDone, now, isTwinkling }: TrackArgs): string {
+  const g = new Grid(W, 1)
+  const acc = isDone ? FINISHED : RUNNING
+  const light = mix(acc, [255, 255, 255], 0.35)
+  const track = mix(back(), [128, 128, 128], isLight() ? 0.14 : 0.18)
+  const fill = mix(track, acc, isDone ? 0.3 : 0.17)
+
+  pill(g, 0, 0, W, x => (x + 0.5 < fx ? fill : track))
+  twinkleFill(g, W, fx, isDone, fill, light, now, isTwinkling)
 
   const shown = cellText(label)
   const kw = shown.length + 2
-  const kx = Math.round(Math.max(0, Math.min(W - kw, fx - kw / 2)))
+  const kx = pillX(W, kw, fx)
 
   pill(g, 0, kx, kx + kw, () => acc)
   g.text(kx + 1, 0, shown, pack(inkOn(acc)), pack(acc))

@@ -31,6 +31,7 @@ import {
   placeBar,
   plural,
   pointAt,
+  prune,
   slug,
   str,
   where,
@@ -38,9 +39,9 @@ import {
 import type { Raw } from './plan'
 import { prefs } from './prefs'
 import { columnsOf } from './raster'
-import { TRACK_H, forgetTrack, glideEnd, keepTracks, liveSource, textWidth, timesAlt, trackSvg } from './svg'
+import { TRACK_H, drawn, glideEnd, lastHead, liveSource, textWidth, timesAlt, trackSvg, waveFrom } from './svg'
 import { isLight, readTint } from './tint'
-import { GLIDE_MS, barCells, blitPlans, currentBand, forgetCells, glide, glideSettleAt, keepCells, landGlides, live, setBand, syncFrames } from './track'
+import { GLIDE_MS, barCells, blitPlans, currentBand, glide, glideSettleAt, landGlides, live, setBand, stillPhase, syncFrames } from './track'
 
 const plans = atom({ plugin: 'watt', key: 'plans' } as const, [])
 const isOpen = atom({ plugin: 'watt', key: 'isOpen' } as const, true)
@@ -112,10 +113,10 @@ function settleBy($: EngineInterface, at: number, now: number) {
 const hasLeft = (p: Plan, now: number) => prefs.isAutoClose && p.state === 'done' && p.endedAt != null && now - p.endedAt >= prefs.doneBarMs
 
 // module maps outlive the bars they describe: a bar pushed out past MAX_BARS, a cleared list; drop what no bar holds
+const perBar = [lastHead, waveFrom, drawn, glide, stillPhase]
 function forgetGone(list: readonly Plan[]) {
   const bars = new Set(list.map(p => p.id))
-  keepTracks(bars)
-  keepCells(bars)
+  prune(perBar, key => bars.has(key))
 }
 
 // leftAt: the clock's time when it let the bar go. The bar is looked at again as it is taken away
@@ -126,8 +127,7 @@ async function dropPlan($: EngineInterface, id: string, leftAt?: number) {
     return list.filter(p => p !== gone)
   })
   if (!gone) return
-  forgetTrack(id)
-  forgetCells(id)
+  prune(perBar, key => key !== id)
   await saveNow($)
 }
 
@@ -300,7 +300,8 @@ async function syncTint($: EngineInterface, now: number) {
 // ---------- the main loop's turn ----------
 
 // per-turn bookkeeping of the main loop; module variables are fine here, a reload just starts a fresh count
-const turnWork = { calls: 0, sinceUpdate: 0, isPlanTouched: false, hasRefused: false, isWaitingOnBackground: false }
+const fresh = () => ({ calls: 0, sinceUpdate: 0, isPlanTouched: false, hasRefused: false, isWaitingOnBackground: false })
+const turnWork = fresh()
 let hasWarnedNoTool = false
 
 // run from watt's one turn.start hook. A subagent's start leaves the main loop's counts and its animation alone
@@ -308,11 +309,7 @@ export async function turnStarted($: EngineInterface, isMain: boolean): Promise<
   if (isMain) {
     live.isTurnLive = true
     chimed.inTurn = false
-    turnWork.calls = 0
-    turnWork.sinceUpdate = 0
-    turnWork.isPlanTouched = false
-    turnWork.hasRefused = false
-    turnWork.isWaitingOnBackground = false
+    Object.assign(turnWork, fresh())
   }
   // the engine hands the tool to the session over HTTP on 127.0.0.1; an antivirus web filter or a proxy that
   // catches loopback breaks that, and the tool is simply missing, so say why once instead of drawing nothing

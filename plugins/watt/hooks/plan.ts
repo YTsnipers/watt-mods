@@ -43,6 +43,14 @@ export const isFinished = (s: StepStatus) => s === 'done' || s === 'skipped'
 
 export const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
 
+// module maps outlive the bars they describe: every entry whose bar id `keep` refuses is dropped
+export function prune(maps: Map<string, unknown>[], keep: (id: string) => boolean): void {
+  for (const m of maps) for (const id of m.keys()) if (!keep(id)) m.delete(id)
+}
+
+// the step work moves on to: the first one still pending after `at`, else the first pending one anywhere
+const nextPending = (steps: PlanStep[], at: number) => steps.slice(at + 1).find(st => st.status === 'pending') ?? steps.find(st => st.status === 'pending')
+
 // short updates: {next:true}, {done:[titles]}, {active:title}, {failed:title} against the stored plan;
 // titles it cannot find come back in missing, so the call is refused instead of passing as a success
 export function applyOps(stages: PlanStage[], input: Raw, now: number): { stages: PlanStage[]; missing: string[] } {
@@ -72,7 +80,7 @@ export function applyOps(stages: PlanStage[], input: Raw, now: number): { stages
     // finishes only the step in progress. Past the last step, work goes back to one left open earlier; a call that
     // names the new step itself picks it, so a step jumped over is not finished on the way
     const from = at >= 0 ? at : steps.findIndex(st => st.status === 'error')
-    const following = steps.slice(from + 1).find(st => st.status === 'pending') ?? steps.find(st => st.status === 'pending')
+    const following = nextPending(steps, from)
     if (following && typeof input.active !== 'string') following.status = 'active'
   }
   let lastDone = -1
@@ -83,7 +91,7 @@ export function applyOps(stages: PlanStage[], input: Raw, now: number): { stages
   }
   // finishing the step in progress moves on, as next does, unless the call names the new one itself
   if (lastDone >= 0 && typeof input.active !== 'string' && !steps.some(st => st.status === 'active')) {
-    const following = steps.slice(lastDone + 1).find(st => st.status === 'pending') ?? steps.find(st => st.status === 'pending')
+    const following = nextPending(steps, lastDone)
     if (following) following.status = 'active'
   }
   const active = typeof input.active === 'string' ? find(input.active) : undefined

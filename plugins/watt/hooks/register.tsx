@@ -48,7 +48,28 @@ const unionMs = (spans: Span[]): number => {
 }
 
 // waitMs: the part of the turn spent waiting on the person's answer, which the 30s of HANDOFF_MS leaves out.
-const turn = { modelMs: 0, calls: 0, spans: [] as Span[], waitMs: 0 }
+const fresh = () => ({ modelMs: 0, calls: 0, spans: [] as Span[], waitMs: 0 })
+// one object for the module's life: the hooks hold it across their awaits, and a new turn writes fresh counts into it
+const turn = fresh()
+
+// Claude stops mid-turn for the person: the decision sound unless a bar already chimed for it (`asked` holds those),
+// then the time spent waiting is added to the turn's waitMs and `settle` closes the bars' side
+async function askPerson<R>($: EngineInterface, asked: string[], run: () => Promise<R>, settle: () => Promise<unknown>): Promise<R> {
+  if (asked.length === 0) {
+    play($, 'decision')
+  }
+
+  const askedAt = await $.clock.now()
+
+  try {
+    return await run()
+  } finally {
+    turn.waitMs += (await $.clock.now()) - askedAt
+    await settle().catch(() => undefined)
+    // the person answered: a chime before this was about the question, and the work after it ends with its own sound
+    chimed.inTurn = false
+  }
+}
 
 async function record(
   $: EngineInterface,
@@ -86,10 +107,7 @@ export const register: Register = (on, options) => {
 
   on('turn.start', async ($, e, next) => {
     if (e.agentId === undefined) {
-      turn.modelMs = 0
-      turn.calls = 0
-      turn.spans = []
-      turn.waitMs = 0
+      Object.assign(turn, fresh())
     }
 
     // the bars' side never costs the turn its own bookkeeping
@@ -109,20 +127,7 @@ export const register: Register = (on, options) => {
     // the bar side: the bar set waiting is the one asked about, else the latest at work turns amber
     const question = await openQuestion($).catch(() => ({ asked: [], live: undefined }))
 
-    if (question.asked.length === 0) {
-      play($, 'decision')
-    }
-
-    const askedAt = await $.clock.now()
-
-    try {
-      return await next(e)
-    } finally {
-      turn.waitMs += (await $.clock.now()) - askedAt
-      await closeQuestion($, question).catch(() => undefined)
-      // the person answered: a chime before this was about the question, and the work after it ends with its own sound
-      chimed.inTurn = false
-    }
+    return askPerson($, question.asked, () => next(e), () => closeQuestion($, question))
   })
 
   on('tool.call', { tool: 'ExitPlanMode' }, async ($, e, next) => {
@@ -132,20 +137,7 @@ export const register: Register = (on, options) => {
 
     const asked = await waitingIds($).catch(() => [])
 
-    if (asked.length === 0) {
-      play($, 'decision')
-    }
-
-    const askedAt = await $.clock.now()
-    let ran: Awaited<ReturnType<typeof next>>
-
-    try {
-      ran = await next(e)
-    } finally {
-      turn.waitMs += (await $.clock.now()) - askedAt
-      await answerPlan($, asked).catch(() => undefined)
-      chimed.inTurn = false
-    }
+    const ran = await askPerson($, asked, () => next(e), () => answerPlan($, asked))
 
     if (ran.deny !== undefined || ran.isError === true) {
       return ran

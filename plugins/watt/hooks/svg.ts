@@ -230,6 +230,8 @@ export const CLOCK_CSS = `.ckt{font-variant-numeric:tabular-nums}
 .rm6{animation:r6 3600s steps(6) var(--d) infinite}.rh1{animation:r10 36000s steps(10) var(--d) infinite}.rh10{animation:r10 360000s steps(10) var(--d) infinite}
 .ph1{animation:ho 3600s steps(1,end) var(--d) both}.ph2{animation:hm 3600s steps(1,end) var(--d) both}
 @keyframes r10{to{transform:translateY(-${LINE * 10}px)}}@keyframes r6{to{transform:translateY(-${LINE * 6}px)}}@keyframes hm{from{opacity:0}to{opacity:1}}@keyframes ho{from{opacity:1}to{opacity:0}}`
+// the pill's words, in the style and in the clock's copy of it
+const KT_CSS = `.kt{font:500 12px 'Anthropic Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;fill:${INK}}`
 
 // x is the clock's left edge, top the window's top. Under an hour it reads "12m 05s", the minutes part hidden for
 // the first minute; from an hour on "1h 05m", as elapsed() writes a finished time, up to 99h
@@ -452,8 +454,11 @@ export function drawTrack(p: Plan, W: number, now = 0): Track {
     kw = Math.round(20 + contentW)
     const left = -contentW / 2
     const mid = left + iconW + textW / 2
-    knob = `<rect x="${-kw / 2}" y="0" width="${kw}" height="${H}" rx="${H / 2}" fill="${color}"/>`
-    if (icon) knob += `<path d="${icon}" transform="translate(${left.toFixed(1)} 5) scale(.5)" fill="none" stroke="${INK}" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>`
+    // the pill's body and icon: the knob starts from it, and the hover copy lays the clock over it
+    const face = `<rect x="${-kw / 2}" y="0" width="${kw}" height="${H}" rx="${H / 2}" fill="${color}"/>${
+      icon ? `<path d="${icon}" transform="translate(${left.toFixed(1)} 5) scale(.5)" fill="none" stroke="${INK}" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>` : ''
+    }`
+    knob = face
     // the separator is the mark the pill stands on: a stage's capsule at a stage's first step, a step's dot past it
     const sepMark = (x: number) =>
       w.step === 1
@@ -470,9 +475,6 @@ export function drawTrack(p: Plan, W: number, now = 0): Track {
     } else knob += `<text x="${mid.toFixed(1)}" y="${H / 2 + 4.2}" text-anchor="middle" class="kt">${esc(shown)}</text>`
     // hovering the track lays a copy of the pill over it, the stage name giving way to the time the plan has run so far
     if (!done) {
-      const face = `<rect x="${-kw / 2}" y="0" width="${kw}" height="${H}" rx="${H / 2}" fill="${color}"/>${
-        icon ? `<path d="${icon}" transform="translate(${left.toFixed(1)} 5) scale(.5)" fill="none" stroke="${INK}" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>` : ''
-      }`
       timePill = `${face}${liveClock(mid - CLOCK_W / 2, 3, p.startedAt, 'kc0', 'kt', true)}`
     }
   }
@@ -491,7 +493,7 @@ export function drawTrack(p: Plan, W: number, now = 0): Track {
 ${FLICKER_CSS}
 `
   const style = `<style>
-${prefs.isTwinkling ? motion : ''}.kt{font:500 12px 'Anthropic Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;fill:${INK}}
+${prefs.isTwinkling ? motion : ''}${KT_CSS}
 .kp{font-size:11px;font-weight:400}
 @media (prefers-color-scheme:light){.mp{fill:${rgb(mix(acc, [0, 0, 0], 0.3))};opacity:1}.ma{fill:${GUTTER_LIGHT};opacity:1}}
 ${STILL_CSS}@media (prefers-reduced-motion:reduce){.wm,[class^="q"]{animation:none}${STILL_REDUCED}}
@@ -527,7 +529,7 @@ ${pill}</svg>`
   // the pill's copy with its clock, for the desktop to show over the track while the pointer is on it. Shown at any
   // moment, so it glides with the pill (the same glide and offset, and the same still copy for reduced motion) rather
   // than standing at the new place while the pill slides in under it
-  const clockStyle = `<style>.kt{font:500 12px 'Anthropic Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;fill:${INK}}${CLOCK_CSS}
+  const clockStyle = `<style>${KT_CSS}${CLOCK_CSS}
 ${STILL_CSS}@media (prefers-reduced-motion:reduce){${STILL_REDUCED}}</style>`
   const clockPill = glideKnob ? `<g class="mv" ${place}>${glideKnob}${timePill}</g><g class="sv" ${place}>${timePill}</g>` : `<g ${place}>${timePill}</g>`
   const clock = timePill ? `${open}${clockStyle}${clockPill}</svg>` : ''
@@ -548,17 +550,3 @@ export function timesAlt(p: Plan): string {
 
 // when a gliding picture of the bar is over, 0 for one standing
 export const glideEnd = (id: string): number => drawn.get(id)?.glideUntil ?? 0
-
-// a bar that is gone takes its drawings with it
-export function forgetTrack(id: string): void {
-  lastHead.delete(id)
-  waveFrom.delete(id)
-  drawn.delete(id)
-}
-
-// module maps outlive the bars they describe: drop what no bar holds any more
-export function keepTracks(bars: ReadonlySet<string>): void {
-  for (const id of lastHead.keys()) if (!bars.has(id)) lastHead.delete(id)
-  for (const id of waveFrom.keys()) if (!bars.has(id)) waveFrom.delete(id)
-  for (const id of drawn.keys()) if (!bars.has(id)) drawn.delete(id)
-}
