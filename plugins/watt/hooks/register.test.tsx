@@ -284,3 +284,40 @@ test('a chip shows its model while the name is cut to make room, and drops it on
   expect(at(40)).toContain('haiku 5.5')
   expect(at(16)).not.toContain('haiku')
 })
+
+const ended = (reason: 'answer' | 'aborted' | 'error', durationMs: number, agentId?: string) =>
+  ({ answer: '', durationMs, isAborted: reason === 'aborted', turnId: 't1', reason, ...(agentId ? { agentId } : {}) }) as never
+
+const hearTurns = (on: Parameters<Parameters<typeof test>[1]>[1]): string[] => {
+  const played: string[] = []
+
+  on('audio.play', (_, e) => {
+    if ('asset' in e.clip && e.clip.asset) played.push(e.clip.asset)
+
+    return { value: undefined }
+  })
+  on('session.usage', () => ({ value: { context: {}, rateLimits: [] } as never }))
+  on('turn.complete', () => ({ text: '' }))
+
+  return played
+}
+
+test('a main turn of 30s or more ends with done, or error when it died; an interrupt, a short turn and a subagent stay quiet', async ($, on) => {
+  const played = hearTurns(on)
+
+  await $.turn.complete(ended('answer', 31_000))
+  await $.turn.complete(ended('error', 45_000))
+  await $.turn.complete(ended('aborted', 60_000))
+  await $.turn.complete(ended('answer', 29_000))
+  await $.turn.complete(ended('answer', 90_000, 'a1'))
+
+  expect(played).toEqual(['sounds/done.wav', 'sounds/error.wav'])
+})
+
+test('with sounds off, a long turn ends quietly', { options: { sounds: false } }, async ($, on) => {
+  const played = hearTurns(on)
+
+  await $.turn.complete(ended('answer', 31_000))
+
+  expect(played).toEqual([])
+})

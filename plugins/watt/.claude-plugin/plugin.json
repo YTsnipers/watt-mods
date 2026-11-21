@@ -20,8 +20,8 @@
     },
     "sounds": {
       "type": "boolean",
-      "title": "Play a sound when the last agent ends",
-      "description": "A soft sound when all running subagents finish; another when one failed",
+      "title": "Play a sound when work ends",
+      "description": "A soft sound when a main turn of 30s or more ends and when all running subagents finish; the error one when it failed",
       "default": true
     },
     "showModel": {

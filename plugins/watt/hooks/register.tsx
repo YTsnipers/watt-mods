@@ -3,12 +3,15 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Durations } from '../types'
 import { register as registerAgents } from './agents'
+import { prefs } from './prefs'
 import { register as registerSettings } from './settings'
 
 const durations = atom({ plugin: 'watt', key: 'durations' } as const, {} as Durations)
 
 const KEEP = 400
 const CONTEXT_WINDOW = 1_000_000
+// A main-loop turn at least this long ends with a sound: the person has likely looked away and now takes over.
+const HANDOFF_MS = 30_000
 
 type Span = [start: number, end: number]
 
@@ -110,6 +113,13 @@ export const register: Register = (on, options) => {
 
     if (e.agentId !== undefined) {
       return out
+    }
+
+    // Done when it answered, error when an API error or a refusal ended it; an interrupt is the person already there.
+    const sound = e.reason === 'answer' ? 'done' : e.reason === 'aborted' ? undefined : 'error'
+
+    if (prefs.isSoundOn && sound !== undefined && e.durationMs >= HANDOFF_MS) {
+      void $.audio.play({ asset: `sounds/${sound}.wav` }).catch(() => undefined)
     }
 
     const noun = turn.calls === 1 ? 'tool call' : 'tool calls'
