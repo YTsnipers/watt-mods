@@ -112,6 +112,8 @@ let waiting = new Set<string>()
 let head = 0
 // Running agents at the last sync, and the ids already announced: a sound plays when the last one ends.
 let lastActive = 0
+// Agents that ran since the row last had none running: the end sound speaks for these, not for a chip left from before.
+const batch = new Set<string>()
 
 async function running($: EngineInterface): Promise<Chip[]> {
   const agents = (await $.agent.list()).filter(a => a.hasRow && !stopped.has(a.id) && live(a.status))
@@ -203,11 +205,19 @@ function sync($: EngineInterface): Promise<void> {
 async function syncOnce($: EngineInterface): Promise<void> {
   const active = await settle($)
 
-  // The last running agent just ended: one soft sound, the error one if any of the finished failed.
+  for (const c of active) {
+    batch.add(c.id)
+  }
+
+  // The last running agent just ended: one soft sound, the error one if any that ran with it failed.
   if (prefs.isSoundOn && lastActive > 0 && active.length === 0 && finished.size > 0) {
-    const name = [...finished.values()].some(c => !c.isOk) ? 'error' : 'done'
+    const name = [...finished.values()].some(c => batch.has(c.id) && !c.isOk) ? 'error' : 'done'
 
     void $.audio.play({ asset: `sounds/${name}.wav` }).catch(() => undefined)
+  }
+
+  if (active.length === 0) {
+    batch.clear()
   }
 
   lastActive = active.length

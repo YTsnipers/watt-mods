@@ -67,8 +67,8 @@ const rasterText = (cells: string): string => {
 
 type Status = 'running' | 'completed' | 'killed'
 
-const agent = (status: Status) => ({
-  id: 'a1',
+const agent = (status: Status, id = 'a1') => ({
+  id,
   description: 'sandbox probe',
   type: 'general-purpose',
   status,
@@ -145,11 +145,14 @@ test('a finished agent turns green, stays, and has a close button', async ($, on
 })
 
 // An agent row whose timer ticks only when the test says: each period's dispatch waits for `tick()`.
-const tickingRow = (on: On, read: () => { status: Status; taskStatus: Status }) => {
+// One agent's row, or several (each with its id).
+type Row = { id?: string; status: Status; taskStatus: Status }
+
+const tickingRow = (on: On, read: () => Row | Row[]) => {
   const played: string[] = []
   const periods: Array<() => void> = []
 
-  on('agent.list', () => ({ value: [{ ...agent(read().status), taskStatus: read().taskStatus }] as never }))
+  on('agent.list', () => ({ value: [read()].flat().map(r => ({ ...agent(r.status, r.id), taskStatus: r.taskStatus })) as never }))
   on('clock.now', () => ({ value: 1_005_000 }))
   // The 2s after a SubagentStop never ends here: the stopped agent stays stopped.
   on('clock.after', () => new Promise(() => {}))
@@ -241,6 +244,38 @@ test('a chip that ended while its task still read running turns red once the tas
   await tick()
 
   expect(await chipText($, 'killed')).toMatch(/^x sandbox probe/)
+})
+
+const row = (id: string, status: Status): Row => ({ id, status, taskStatus: status })
+const start = ($: Engine, id: string) => $.classic.SubagentStart({ agent_id: id, agent_type: 'general-purpose' } as never)
+
+test('a red chip left from an earlier run does not give the next run, which succeeded, the error sound', async ($, on) => {
+  let rows = [row('a1', 'running')]
+  const { played, tick } = tickingRow(on, () => rows)
+
+  await start($, 'a1')
+  rows = [row('a1', 'killed')]
+  await tick()
+  rows = [row('a1', 'killed'), row('a2', 'running')]
+  await start($, 'a2')
+  rows = [row('a1', 'killed'), row('a2', 'completed')]
+  await tick()
+
+  expect(played).toEqual(['sounds/error.wav', 'sounds/done.wav'])
+})
+
+test('agents that ran together end with the error sound when one failed, even the one that ended first', async ($, on) => {
+  let rows = [row('a1', 'running'), row('a2', 'running')]
+  const { played, tick } = tickingRow(on, () => rows)
+
+  await start($, 'a1')
+  await start($, 'a2')
+  rows = [row('a1', 'killed'), row('a2', 'running')]
+  await tick()
+  rows = [row('a1', 'killed'), row('a2', 'completed')]
+  await tick()
+
+  expect(played).toEqual(['sounds/error.wav'])
 })
 
 test('the terminal is light when the theme says so', () => {
