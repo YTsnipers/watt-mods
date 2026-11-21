@@ -1,5 +1,6 @@
 import type { On } from 'claude-code'
 import { expect, test } from 'claude-code/testing'
+import type { Engine } from 'claude-code/testing'
 
 import { chipCells, contrast, trackCells } from './raster'
 import { isLight, setThemeSetting } from './tint'
@@ -64,7 +65,9 @@ const rasterText = (cells: string): string => {
   return out.replace(/\s+/g, ' ').trim()
 }
 
-const agent = (status: 'running' | 'completed') => ({
+type Status = 'running' | 'completed' | 'killed'
+
+const agent = (status: Status) => ({
   id: 'a1',
   description: 'sandbox probe',
   type: 'general-purpose',
@@ -79,7 +82,7 @@ const agent = (status: 'running' | 'completed') => ({
   hasRow: true,
 })
 
-const AGENT_ROW = (status: 'running' | 'completed') => ({
+const AGENT_ROW = (status: Status) => ({
   plugin: 'watt',
   component: 'AgentRow',
   requestId: 'a1',
@@ -139,6 +142,105 @@ test('a finished agent turns green, stays, and has a close button', async ($, on
 
   expect(await gone.find({ type: 'Raster' })).toBeUndefined()
   await gone.unmount()
+})
+
+// An agent row whose timer ticks only when the test says: each period's dispatch waits for `tick()`.
+const tickingRow = (on: On, read: () => { status: Status; taskStatus: Status }) => {
+  const played: string[] = []
+  const periods: Array<() => void> = []
+
+  on('agent.list', () => ({ value: [{ ...agent(read().status), taskStatus: read().taskStatus }] as never }))
+  on('clock.now', () => ({ value: 1_005_000 }))
+  // The 2s after a SubagentStop never ends here: the stopped agent stays stopped.
+  on('clock.after', () => new Promise(() => {}))
+  let asked: (() => void) | undefined
+  on(
+    'clock.every',
+    () =>
+      new Promise(resolve => {
+        periods.push(() => resolve({ value: undefined } as never))
+        asked?.()
+      }),
+  )
+  on('audio.play', (_, e) => {
+    if ('asset' in e.clip && e.clip.asset) played.push(e.clip.asset)
+
+    return { value: undefined }
+  })
+  on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: '' } as never }))
+  on('classic.SubagentStart', () => ({}))
+  on('classic.SubagentStop', () => ({}))
+  // A pass ends by asking for a redraw: a tick waits for that.
+  let drawn: (() => void) | undefined
+  on('ui.invalidate', () => {
+    drawn?.()
+
+    return { value: undefined }
+  })
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+
+    return <Text>engine row</Text>
+  })
+
+  // The timer asks for its next period on its own time: a tick first waits for one to be asked.
+  const tick = async (): Promise<void> => {
+    if (periods.length === 0) {
+      await new Promise<void>(resolve => {
+        asked = resolve
+      })
+    }
+
+    const pass = new Promise<void>(resolve => {
+      drawn = resolve
+    })
+
+    periods.shift()?.()
+    await pass
+  }
+
+  return { played, tick }
+}
+
+const chipText = async ($: Engine, status: Status): Promise<string> => {
+  const row = await $.ui.mount(AGENT_ROW(status) as never)
+  const text = rasterText(((await row.find({ key: 'chip-a1' }))?.props.cells ?? '') as string)
+
+  await row.unmount()
+
+  return text
+}
+
+test('a subagent stopped by TaskStop, with no SubagentStop, turns red at the next tick and plays the error sound once', async ($, on) => {
+  let status: Status = 'running'
+  const { played, tick } = tickingRow(on, () => ({ status, taskStatus: status }))
+
+  await $.classic.SubagentStart({ agent_id: 'a1', agent_type: 'general-purpose' } as never)
+  status = 'killed'
+  await tick()
+  await tick()
+
+  expect(played).toEqual(['sounds/error.wav'])
+  expect(await chipText($, 'killed')).toMatch(/^x sandbox probe/)
+})
+
+test('a chip that ended while its task still read running turns red once the task reads killed', async ($, on) => {
+  let taskStatus: Status = 'running'
+  const { tick } = tickingRow(on, () => ({ status: 'running', taskStatus }))
+
+  await $.classic.SubagentStart({ agent_id: 'a1', agent_type: 'general-purpose' } as never)
+  await $.classic.SubagentStop({
+    agent_id: 'a1',
+    agent_type: 'general-purpose',
+    stop_hook_active: false,
+    agent_transcript_path: '/dev/null',
+  })
+
+  expect(await chipText($, 'running')).toMatch(/^✓ sandbox probe/)
+  taskStatus = 'killed'
+  await tick()
+
+  expect(await chipText($, 'killed')).toMatch(/^x sandbox probe/)
 })
 
 test('the terminal is light when the theme says so', () => {

@@ -135,6 +135,8 @@ async function running($: EngineInterface): Promise<Chip[]> {
   return agents.map(a => seen.get(a.id) as Chip)
 }
 
+const isOkTask = (taskStatus: string): boolean => taskStatus !== 'failed' && taskStatus !== 'killed'
+
 // Move every agent that was running and no longer is into `finished`; drop the expired and the closed.
 async function settle($: EngineInterface): Promise<Chip[]> {
   const now = await $.clock.now()
@@ -148,8 +150,16 @@ async function settle($: EngineInterface): Promise<Chip[]> {
     }
 
     const info = all.find(a => a.id === id)
-    const isOk = info === undefined || (info.taskStatus !== 'failed' && info.taskStatus !== 'killed')
-    finished.set(id, { ...chip, endAt: now, isOk })
+    finished.set(id, { ...chip, endAt: now, isOk: info === undefined || isOkTask(info.taskStatus) })
+  }
+
+  // A task can read killed or failed a moment after its stop: a finished chip follows it while the list still has it.
+  for (const chip of finished.values()) {
+    const info = all.find(a => a.id === chip.id)
+
+    if (info !== undefined) {
+      chip.isOk = isOkTask(info.taskStatus)
+    }
   }
 
   for (const [id, chip] of finished) {
@@ -162,8 +172,35 @@ async function settle($: EngineInterface): Promise<Chip[]> {
   return active
 }
 
-// Redraw four times a second while any chip shows: the elapsed times and the animation move.
-async function sync($: EngineInterface): Promise<void> {
+// A sync in flight, and whether a call came while it ran: one more pass follows then, so two passes never overlap and
+// `lastActive` never goes back to an older count (which would play the end sound twice).
+let syncing: Promise<void> | undefined
+let isSyncAgain = false
+
+function sync($: EngineInterface): Promise<void> {
+  if (syncing !== undefined) {
+    isSyncAgain = true
+
+    return syncing
+  }
+
+  syncing = (async () => {
+    try {
+      do {
+        isSyncAgain = false
+        await syncOnce($)
+      } while (isSyncAgain)
+    } finally {
+      syncing = undefined
+    }
+  })()
+
+  return syncing
+}
+
+// Redraw four times a second while any chip shows: the elapsed times and the animation move. Each tick also decides the
+// sounds: an agent stopped by TaskStop, or one that died, fires no SubagentStop, so the hooks alone would miss its end.
+async function syncOnce($: EngineInterface): Promise<void> {
   const active = await settle($)
 
   // The last running agent just ended: one soft sound, the error one if any of the finished failed.
@@ -186,7 +223,7 @@ async function sync($: EngineInterface): Promise<void> {
 
   if (active.length > 0 || finished.size > 0) {
     timer ??= $.clock.every(FRAME_MS, () => {
-      void settle($).then(() => $.ui.invalidate('ui.render'))
+      void sync($).catch(() => undefined)
     })
   } else if (timer !== undefined) {
     timer.cancel()
