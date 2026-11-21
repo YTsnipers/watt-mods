@@ -42,9 +42,7 @@ function nearest(list: readonly TurnStat[], ms: number): TurnStat | undefined {
 
 export const register: Register = on => {
   on('ui.render', { component: 'TurnDuration' }, async ($, e, next) => {
-    // the line that waits on background agents draws only its waiting text
-    if (e.props.waitingFor) return next(e)
-
+    // a line drawn while background agents run gets its numbers too: a plugin above may draw it as a duration anyway
     const hit = nearest(await read($, turnStats), e.props.durationMs)
     const row = await next(e)
 
