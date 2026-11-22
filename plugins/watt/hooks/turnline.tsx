@@ -10,7 +10,7 @@ import { STATE_COLOR } from './plan'
 
 type Marks = { orange: number; red: number }
 
-// a share at or past its mark takes its colour: context of the model window, usage of the five-hour limit
+// a share at or past its mark takes its colour: context of the model window, usage of the five-hour and seven-day limits
 export const MARKS: { context: Marks; usage: Marks } = { context: { orange: 25, red: 35 }, usage: { orange: 60, red: 80 } }
 
 // the progress bars' own orange (at work) and red (failed)
@@ -68,6 +68,7 @@ export const register: Register = on => {
           {row}
           {part('context', hit.context, 1, MARKS.context)}
           {part('usage', hit.usage, 0, MARKS.usage)}
+          {part('7d usage', hit.usage7d, 0, MARKS.usage)}
         </Box>
       )
     }
@@ -80,6 +81,7 @@ export const register: Register = on => {
           <Text dimColor>{`● watt: ${hit.summary}`}</Text>
           {part('context', hit.context, 1, MARKS.context)}
           {part('usage', hit.usage, 0, MARKS.usage)}
+          {part('7d usage', hit.usage7d, 0, MARKS.usage)}
         </Text>
       </Box>
     )

@@ -356,6 +356,44 @@ test('each number turns orange and red at its own marks', () => {
   expect([59, 60, 79, 80].map(v => tintOf(v, MARKS.usage))).toEqual([undefined, '#D97757', '#D97757', '#C5353E'])
 })
 
+test('the seven-day usage follows the five-hour one, and both windows go to a file named by a hash of the login', async ($, on) => {
+  on('audio.play', () => ({ value: undefined }))
+  on('session.usage', () => ({
+    value: {
+      context: { tokens: 10_000, window: 200_000 },
+      rateLimits: [
+        { kind: 'five_hour', percentUsed: 49, resetsAt: '2026-11-22T10:00:00.000Z' },
+        { kind: 'seven_day', percentUsed: 91, resetsAt: '2026-11-26T16:00:00.000Z' },
+      ],
+    } as never,
+  }))
+  const env: Record<string, string> = { HOME: '/home/me', CLAUDE_CODE_OAUTH_TOKEN: 'sk-test' }
+  on('env.get', (_, e) => ({ value: env[e.name] }))
+  const writes: { path: string; text: string }[] = []
+  on('fs.write', (_, e) => {
+    writes.push(e)
+
+    return { value: undefined }
+  })
+  keptState(on)
+  on('turn.complete', () => ({ text: '' }))
+  engineDurationLine(on)
+
+  await $.turn.complete(ended('answer', 9_520))
+
+  const ui = await $.ui.mount({ ...DURATION, surface: 'terminal', props: { word: 'Baked', durationMs: 9_520 } })
+
+  expect((await ui.find({ type: 'Text', text: /^usage 49%$/ }))?.props.dimColor).toBe(true)
+  expect((await ui.find({ type: 'Text', text: /^7d usage 91%$/ }))?.props.color).toBe('#C5353E')
+  await ui.unmount()
+
+  expect(writes.map(w => w.path)).toEqual(['/home/me/.cache/claude-usage/usage-287a0fd2.json'])
+  expect(JSON.parse(writes[0]?.text ?? '')).toMatchObject({
+    five_hour: { used_percentage: 49, resets_at: 1795341600 },
+    seven_day: { used_percentage: 91, resets_at: 1795708800 },
+  })
+})
+
 test('the terminal is light when the theme says so', () => {
   setThemeSetting('light')
   expect(isLight()).toBe(true)

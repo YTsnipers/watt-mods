@@ -16,6 +16,7 @@ import {
   waitingIds,
 } from './bars'
 import { register as registerSettings } from './settings'
+import { shareUsage } from './share'
 import { recordTurn, register as registerTurnline } from './turnline'
 
 const durations = atom({ plugin: 'watt', key: 'durations' } as const, {} as Durations)
@@ -210,7 +211,9 @@ export const register: Register = (on, options) => {
       summary: `This turn: ${turn.calls} ${noun}, model ${seconds(turn.modelMs)}, tools ${seconds(unionMs(turn.spans))}${cache}`,
       context: context.tokens === undefined || !context.window ? undefined : (context.tokens / context.window) * 100,
       usage: rateLimits.find(r => r.kind === 'five_hour')?.percentUsed,
+      usage7d: rateLimits.find(r => r.kind === 'seven_day')?.percentUsed,
     })
+    await shareUsage($, rateLimits).catch(() => undefined)
 
     return out
   })
