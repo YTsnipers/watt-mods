@@ -53,7 +53,7 @@ export const register: Register = on => {
 
       return color ? <Text color={color}>{text}</Text> : <Text dimColor>{text}</Text>
     }
-    // the five-hour and seven-day shares under one label: `usage 5h 54%/7d 92%`, each coloured at its own value
+    // the five-hour and seven-day shares side by side: `5h 54% & 7d 92%`, each coloured at its own value
     const windows = [
       hit.usage === undefined ? null : tinted(`5h ${hit.usage.toFixed(0)}%`, hit.usage, MARKS.usage),
       hit.usage7d === undefined ? null : tinted(`7d ${hit.usage7d.toFixed(0)}%`, hit.usage7d, MARKS.usage),
@@ -68,9 +68,9 @@ export const register: Register = on => {
         )}
         {windows.length === 0 ? null : (
           <Text>
-            <Text dimColor> · usage </Text>
+            <Text dimColor> · </Text>
             {windows[0]}
-            {windows.length > 1 ? <Text dimColor>/</Text> : null}
+            {windows.length > 1 ? <Text dimColor> & </Text> : null}
             {windows[1] ?? null}
           </Text>
         )}

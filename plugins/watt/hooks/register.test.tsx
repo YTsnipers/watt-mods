@@ -385,6 +385,8 @@ test('the seven-day usage follows the five-hour one, and both windows go to a fi
 
   expect((await ui.find({ type: 'Text', text: /^5h 49%$/ }))?.props.dimColor).toBe(true)
   expect((await ui.find({ type: 'Text', text: /^7d 91%$/ }))?.props.color).toBe('#C5353E')
+  expect(await ui.find({ type: 'Text', text: ' & ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /usage/ })).toBeUndefined()
   await ui.unmount()
 
   expect(writes.map(w => w.path)).toEqual(['/home/me/.cache/claude-usage/usage-287a0fd2.json'])
