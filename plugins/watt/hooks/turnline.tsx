@@ -48,41 +48,56 @@ export const register: Register = on => {
     if (!hit) return row
 
     const { Box, Text } = $.ui.resolve(e)
-    const part = (label: string, value: number | undefined, digits: number, marks: Marks) => {
-      if (value === undefined) return null
+    const tinted = (text: string, value: number, marks: Marks) => {
       const color = tintOf(value, marks)
-      const text = `${label} ${value.toFixed(digits)}%`
 
-      return (
-        <Text>
-          <Text dimColor> · </Text>
-          {color ? <Text color={color}>{text}</Text> : <Text dimColor>{text}</Text>}
-        </Text>
-      )
+      return color ? <Text color={color}>{text}</Text> : <Text dimColor>{text}</Text>
     }
+    // the five-hour and seven-day shares under one label: `usage 5h 54%/7d 92%`, each coloured at its own value
+    const windows = [
+      hit.usage === undefined ? null : tinted(`5h ${hit.usage.toFixed(0)}%`, hit.usage, MARKS.usage),
+      hit.usage7d === undefined ? null : tinted(`7d ${hit.usage7d.toFixed(0)}%`, hit.usage7d, MARKS.usage),
+    ].filter(w => w !== null)
+    const numbers = (
+      <Text>
+        {hit.context === undefined ? null : (
+          <Text>
+            <Text dimColor> · </Text>
+            {tinted(`ctx ${hit.context.toFixed(1)}%`, hit.context, MARKS.context)}
+          </Text>
+        )}
+        {windows.length === 0 ? null : (
+          <Text>
+            <Text dimColor> · usage </Text>
+            {windows[0]}
+            {windows.length > 1 ? <Text dimColor>/</Text> : null}
+            {windows[1] ?? null}
+          </Text>
+        )}
+      </Text>
+    )
 
     // a turn recorded before the summary moved here keeps its numbers on the duration line
     if (hit.summary === undefined) {
       return (
         <Box>
           {row}
-          {part('context', hit.context, 1, MARKS.context)}
-          {part('usage', hit.usage, 0, MARKS.usage)}
-          {part('7d usage', hit.usage7d, 0, MARKS.usage)}
+          {numbers}
         </Box>
       )
     }
 
+    // one row: the numbers keep their width and a narrow terminal cuts the summary before them
     return (
       <Box flexDirection="column">
         {row}
         <Text> </Text>
-        <Text>
-          <Text dimColor>{`● watt: ${hit.summary}`}</Text>
-          {part('context', hit.context, 1, MARKS.context)}
-          {part('usage', hit.usage, 0, MARKS.usage)}
-          {part('7d usage', hit.usage7d, 0, MARKS.usage)}
-        </Text>
+        <Box>
+          <Box flexShrink={1}>
+            <Text dimColor wrap="truncate-end">{`● watt: ${hit.summary}`}</Text>
+          </Box>
+          <Box flexShrink={0}>{numbers}</Box>
+        </Box>
       </Box>
     )
   })

@@ -198,17 +198,17 @@ export const register: Register = (on, options) => {
 
     chimed.inTurn = false
 
-    const noun = turn.calls === 1 ? 'tool call' : 'tool calls'
+    const noun = turn.calls === 1 ? 'tool' : 'tools'
     const u = e.usage
     const prompt = u ? u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens : 0
-    const cache = u && prompt > 0 ? `, cache hit ${Math.round((u.cache_read_input_tokens / prompt) * 100)}%` : ''
+    const cache = u && prompt > 0 ? `, cache ${Math.round((u.cache_read_input_tokens / prompt) * 100)}%` : ''
 
     const { context, rateLimits } = await $.session.usage()
     // the summary is drawn under the duration line with the numbers coloured (turnline.tsx), not handed back as the
     // turn's text: that line is the engine's to draw and takes no colour. Context is of the model's own window, 200k or 1M
     await recordTurn($, {
       durationMs: e.durationMs,
-      summary: `This turn: ${turn.calls} ${noun}, model ${seconds(turn.modelMs)}, tools ${seconds(unionMs(turn.spans))}${cache}`,
+      summary: `${turn.calls} ${noun} ${seconds(unionMs(turn.spans))}, model ${seconds(turn.modelMs)}${cache}`,
       context: context.tokens === undefined || !context.window ? undefined : (context.tokens / context.window) * 100,
       usage: rateLimits.find(r => r.kind === 'five_hour')?.percentUsed,
       usage7d: rateLimits.find(r => r.kind === 'seven_day')?.percentUsed,

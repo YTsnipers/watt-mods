@@ -323,9 +323,9 @@ test('the turn summary leaves the engine text for a line under the duration line
   const ui = await $.ui.mount({ ...DURATION, surface: 'terminal', props: { word: 'Baked', durationMs: 9_520 } })
 
   expect(await ui.find({ type: 'Text', text: 'Baked for 9s' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^● watt: This turn: 0 tool calls, model 0\.0s, tools 0\.0s$/ })).toBeDefined()
-  expect((await ui.find({ type: 'Text', text: /^context 50\.0%$/ }))?.props.color).toBe('#C5353E')
-  expect((await ui.find({ type: 'Text', text: /^usage 70%$/ }))?.props.color).toBe('#D97757')
+  expect((await ui.find({ type: 'Text', text: /^● watt: 0 tools 0\.0s, model 0\.0s$/ }))?.props.wrap).toBe('truncate-end')
+  expect((await ui.find({ type: 'Text', text: /^ctx 50\.0%$/ }))?.props.color).toBe('#C5353E')
+  expect((await ui.find({ type: 'Text', text: /^5h 70%$/ }))?.props.color).toBe('#D97757')
   await ui.unmount()
 })
 
@@ -339,7 +339,7 @@ test('below their marks the numbers stay dim, and a duration line no turn matche
   await $.turn.complete(ended('answer', 9_520))
 
   const matched = await $.ui.mount({ ...DURATION, surface: 'terminal', props: { word: 'Baked', durationMs: 10_400 } })
-  const context = await matched.find({ type: 'Text', text: /^context 20\.0%$/ })
+  const context = await matched.find({ type: 'Text', text: /^ctx 20\.0%$/ })
 
   expect(context?.props.color).toBeUndefined()
   expect(context?.props.dimColor).toBe(true)
@@ -347,7 +347,7 @@ test('below their marks the numbers stay dim, and a duration line no turn matche
 
   const other = await $.ui.mount({ ...DURATION, requestId: 'turn-2', surface: 'terminal', props: { word: 'Baked', durationMs: 60_000 } })
 
-  expect(await other.find({ type: 'Text', text: /context/ })).toBeUndefined()
+  expect(await other.find({ type: 'Text', text: /ctx/ })).toBeUndefined()
   await other.unmount()
 })
 
@@ -383,8 +383,8 @@ test('the seven-day usage follows the five-hour one, and both windows go to a fi
 
   const ui = await $.ui.mount({ ...DURATION, surface: 'terminal', props: { word: 'Baked', durationMs: 9_520 } })
 
-  expect((await ui.find({ type: 'Text', text: /^usage 49%$/ }))?.props.dimColor).toBe(true)
-  expect((await ui.find({ type: 'Text', text: /^7d usage 91%$/ }))?.props.color).toBe('#C5353E')
+  expect((await ui.find({ type: 'Text', text: /^5h 49%$/ }))?.props.dimColor).toBe(true)
+  expect((await ui.find({ type: 'Text', text: /^7d 91%$/ }))?.props.color).toBe('#C5353E')
   await ui.unmount()
 
   expect(writes.map(w => w.path)).toEqual(['/home/me/.cache/claude-usage/usage-287a0fd2.json'])
