@@ -1,6 +1,6 @@
 # watt-mods
 
-[English](README.md) | 繁體中文 | [简体中文](README.zh-CN.md)
+[English](README.md) | 繁體中文 | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Français](README.fr.md) | [Español](README.es.md)
 
 apollon 做的 Claude Code mod。每個 mod 都直接加在 Claude Code 的介面上：有的在提示列旁邊多顯示資訊，有的也會改變
 Claude 的工作方式。

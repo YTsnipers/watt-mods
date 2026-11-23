@@ -1,6 +1,6 @@
 # watt
 
-English | [繁體中文](README.zh-TW.md) | [简体中文](README.zh-CN.md)
+English | [繁體中文](README.zh-TW.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Français](README.fr.md) | [Español](README.es.md)
 
 Claude Code does not show how long each tool call took, how much of your five-hour and seven-day usage is left, or
 what each subagent is doing. watt draws all of that in the terminal, next to the prompt.

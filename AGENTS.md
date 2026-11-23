@@ -58,4 +58,5 @@ npx -p typescript tsc -p . --noEmit
 - Widths are terminal columns: use `columnsOf` (CJK and emoji take two) and the width the surface measured
   (`e.props.columns`, `e.props.bodyColumns`, `e.viewport.columns`), never a fixed terminal size.
 - Code ported from plan-progress keeps its MIT notice (`plugins/watt/NOTICE`).
-- Each `README.md` has a `README.zh-TW.md` and a `README.zh-CN.md` beside it: a change to one is made to all three in the same commit.
+- Each `README.md` has translations beside it (`README.zh-TW.md`, `.zh-CN`, `.ja`, `.ko`, `.fr`, `.es`), each linking all seven on
+  its third line: a change to one README is made to all seven in the same commit.
