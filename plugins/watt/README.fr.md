@@ -5,6 +5,8 @@
 Claude Code n'affiche ni la durée de chaque appel d'outil, ni ce qu'il reste de votre usage sur cinq heures et sept jours,
 ni ce que fait chaque sous-agent. watt dessine tout cela dans le terminal, à côté du prompt.
 
+**[Démo en direct](https://ytsnipers.github.io/watt-mods/)** : un tour rejoué avec watt, dessiné par son propre code de rendu.
+
 - **Durée des appels d'outil** : la ligne de chaque appel terminé se finit par sa durée, par exemple `took 1.2s`.
 - **Ligne de tour** : sous la ligne de durée d'un tour principal, le contexte utilisé (rapporté à la fenêtre du modèle) et
   l'usage sur cinq heures et sept jours, en orange puis en rouge au-delà de leurs seuils.

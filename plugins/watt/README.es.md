@@ -5,6 +5,8 @@
 Claude Code no muestra cuánto tardó cada llamada a herramienta, cuánto te queda del uso de cinco horas y siete días, ni qué
 está haciendo cada subagente. watt dibuja todo eso en la terminal, junto al prompt.
 
+**[Demo en vivo](https://ytsnipers.github.io/watt-mods/)**: un turno reproducido con watt, dibujado por su propio código de renderizado.
+
 - **Tiempo de cada llamada**: la fila de cada llamada a herramienta terminada acaba con lo que tardó, p. ej. `took 1.2s`.
 - **Línea del turno**: bajo la línea de duración de un turno principal, el contexto usado (frente a la ventana del propio
   modelo) y el uso de cinco horas y siete días, en naranja y luego en rojo al pasar sus umbrales.

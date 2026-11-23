@@ -60,5 +60,7 @@ npx -p typescript tsc -p . --noEmit
 - Code ported from plan-progress keeps its MIT notice (`plugins/watt/NOTICE`).
 - The oldest Claude Code watt runs on is `engines["claude-code"]` in `plugin.json`: a hook or `$` call that needs a
   newer build raises it there and in the Requirements section of all seven READMEs.
+- `docs/index.html` is the GitHub Pages demo, built from `docs/demo/template.html` and watt's own `raster.ts`, `track.ts`
+  and `plan.ts`: after changing any of them, run `docs/demo/build.sh` and commit the rebuilt page.
 - Each `README.md` has translations beside it (`README.zh-TW.md`, `.zh-CN`, `.ja`, `.ko`, `.fr`, `.es`), each linking all seven on
   its third line: a change to one README is made to all seven in the same commit.

@@ -5,6 +5,8 @@ English | [繁體中文](README.zh-TW.md) | [简体中文](README.zh-CN.md) | [�
 Claude Code mods by apollon. Each mod adds to Claude Code's own interface: what it shows next to the prompt, and in
 some cases how Claude works.
 
+**[Live demo](https://ytsnipers.github.io/watt-mods/)**: a replay of one turn with watt, drawn by watt's own rendering code.
+
 | Mod | What it does |
 | --- | --- |
 | [watt](plugins/watt) | Shows what Claude Code leaves hidden: how long each tool call took, context and five-hour/seven-day usage after each turn, a status chip per running subagent, and live progress bars above the prompt, with soft sounds when work ends, fails or waits for you. It also asks Claude to keep a progress bar for multi-step work; see [what it changes](plugins/watt#what-it-changes-in-claudes-behaviour). |

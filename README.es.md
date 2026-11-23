@@ -5,6 +5,8 @@
 Mods de Claude Code por apollon. Cada mod se suma a la propia interfaz de Claude Code: lo que muestra junto al prompt y, en
 algunos casos, cómo trabaja Claude.
 
+**[Demo en vivo](https://ytsnipers.github.io/watt-mods/)**: un turno reproducido con watt, dibujado por su propio código de renderizado.
+
 | Mod | Qué hace |
 | --- | --- |
 | [watt](plugins/watt/README.es.md) | Muestra lo que Claude Code deja oculto: cuánto tardó cada llamada a herramienta, el contexto y el uso de cinco horas y siete días tras cada turno, un chip de estado por cada subagente en marcha y barras de progreso en vivo sobre el prompt, con sonidos suaves cuando el trabajo termina, falla o espera tu respuesta. También le pide a Claude que mantenga una barra de progreso en el trabajo de varios pasos; consulta [qué cambia en el comportamiento de Claude](plugins/watt/README.es.md#qué-cambia-en-el-comportamiento-de-claude). |
