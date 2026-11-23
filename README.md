@@ -1,5 +1,7 @@
 # watt-mods
 
+English | [繁體中文](README.zh-TW.md)
+
 Claude Code mods by apollon. Each mod adds to Claude Code's own interface: what it shows next to the prompt, and in
 some cases how Claude works.
 
