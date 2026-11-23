@@ -4,7 +4,7 @@
     "name": "apollon"
   },
   "metadata": {
-    "description": "Personal Claude Code mods"
+    "description": "Claude Code mods by apollon: watt, live tool times, usage, subagent chips and progress bars"
   },
   "plugins": [
     {
