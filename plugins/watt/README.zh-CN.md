@@ -7,6 +7,8 @@ Claude Code 不会显示每个工具调用花了多久、五小时与七天用�
 
 **[在线 demo](https://ytsnipers.github.io/watt-mods/)**：用 watt 自己的绘图代码重放一轮对话。
 
+![watt 在 Claude Code 终端中：工具耗时、本轮摘要行、子代理标签与进度条](../../docs/screenshot.png)
+
 - **工具调用耗时**：每个完成的工具调用，该行末尾会标出花了多久，例如 `took 1.2s`。
 - **本轮摘要行**：主轮耗时行下方，显示已用的 context（按该模型自己的上限计算）与五小时、七天用量，超过阈值先变橙、
   再变红。

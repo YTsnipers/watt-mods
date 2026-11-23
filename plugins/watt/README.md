@@ -7,6 +7,8 @@ what each subagent is doing. watt draws all of that in the terminal, next to the
 
 **[Live demo](https://ytsnipers.github.io/watt-mods/)**: a replay of one turn with watt, drawn by watt's own rendering code.
 
+![watt in a Claude Code terminal: tool times, the turn line, agent chips and progress bars](../../docs/screenshot.png)
+
 - **Tool call times**: each finished tool call's row ends with how long it took, e.g. `took 1.2s`.
 - **Turn line**: the line under a main turn's duration carries the context used (against the model's own window) and
   the five-hour and seven-day usage, orange then red past their marks.

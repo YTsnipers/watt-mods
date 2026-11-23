@@ -63,7 +63,7 @@ a { color: var(--accent); }
 .g { color: var(--tgreen); }
 .rd { color: var(--tred); }
 .o { color: var(--torange); }
-.box { color: var(--tline); }
+.pbox { margin-top: 18px; border: 1px solid var(--tline); border-radius: 6px; padding: 6px 1ch; box-sizing: border-box; height: 32px; }
 
 .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
 .group { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
@@ -87,6 +87,10 @@ code { font-family: var(--font-mono); font-size: .92em; }
 .cmd { display: flex; gap: 10px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 0; }
 .cmd code { flex: 1; overflow-x: auto; white-space: nowrap; font-size: 14px; }
 .fine { color: var(--muted); font-size: 13px; max-width: 80ch; }
+.shot .wrap > :not(.stage), .shot .controls { display: none; }
+.shot { padding: 0 !important; }
+.shot .stage { padding: 0; border: 0; background: none; }
+.shot .term { height: auto; border-radius: 10px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
@@ -256,11 +260,20 @@ Tasks needing more than ~3 edits or commands get a bar via ${Kt}: create it once
     return out
   }
 
+  // the scene's agents at t, as the row draws them
   function agentRow(t, now) {
-    const chips = AGENTS.filter(a => t >= a.start && !(t >= a.end && t - a.end > KEEP))
-    if (chips.length === 0) { summaryHead = 0; return '' }
-    const active = chips.filter(a => t < a.end)
-    const done = chips.filter(a => t >= a.end)
+    const items = AGENTS.filter(a => t >= a.start && !(t >= a.end && t - a.end > KEEP)).map(a => ({
+      description: a.description, model: a.model, state: t < a.end ? 'running' : a.ok ? 'done' : 'failed',
+      ratio: a.ratio * Math.min(1, (Math.min(t, a.end) - a.start) / (a.end - a.start)), ms: (Math.min(t, a.end) - a.start) * SCALE * 1000,
+    }))
+    return agentRowFrom(items, now, false)
+  }
+
+  // The agent row as agents.tsx lays it out: the summary pill, then one chip per agent, running ones first.
+  function agentRowFrom(items, now, isSettled) {
+    if (items.length === 0) { summaryHead = 0; return '' }
+    const active = items.filter(c => c.state === 'running')
+    const done = items.filter(c => c.state !== 'running')
     const ordered = [...active, ...done]
     const row = Math.max(1, cols - 6)
     const isAllDone = active.length === 0
@@ -268,7 +281,7 @@ Tasks needing more than ~3 edits or commands get a bar via ${Kt}: create it once
     const label = isAllDone ? `✓ Done ${done.length}/${ordered.length}  100%` : `● ${done.length}/${ordered.length}  ${pct}%`
     const summaryW = Math.min(row, Math.max(24, len(label) + 6))
     const target = (isAllDone ? 1 : done.length / ordered.length) * summaryW
-    summaryHead = isAllDone || Math.abs(target - summaryHead) < 0.05 ? target : summaryHead + (target - summaryHead) * 0.35
+    summaryHead = isSettled || isAllDone || Math.abs(target - summaryHead) < 0.05 ? target : summaryHead + (target - summaryHead) * 0.35
     let h = '  ' + cellsHTML(W.trackCells({ width: summaryW, head: summaryHead, label, isDone: isAllDone, now, isTwinkling: W.prefs.isTwinkling }))
     const total = row - summaryW - 1
     const minChip = W.prefs.isModelShown ? 28 : 18
@@ -279,13 +292,11 @@ Tasks needing more than ~3 edits or commands get a bar via ${Kt}: create it once
     const share = Math.floor((total - (hidden > 0 ? moreW : 0) - (shown.length - 1)) / Math.max(1, shown.length))
     const width = Math.min(Math.floor(row / 2), share)
     for (const c of shown) {
-      const ended = t >= c.end
-      const state = !ended ? 'running' : c.ok ? 'done' : 'failed'
+      const ended = c.state !== 'running'
       const room = ended ? width - 3 : width
-      const ratio = c.ratio * Math.min(1, (Math.min(t, c.end) - c.start) / (c.end - c.start))
       h += ' ' + cellsHTML(W.chipCells({ width: room, name: c.description, model: W.prefs.isModelShown ? c.model : '',
-        time: clock((Math.min(t, c.end) - c.start) * SCALE * 1000), state, ratio, frame: 0, now, isTwinkling: W.prefs.isTwinkling }))
-      if (ended) h += `<span style="background:${W.hexOf(W.chipTint(state))}"> × </span>`
+        time: clock(c.ms), state: c.state, ratio: c.ratio, frame: 0, now, isTwinkling: W.prefs.isTwinkling }))
+      if (ended) h += `<span style="background:${W.hexOf(W.chipTint(c.state))}"> × </span>`
     }
     if (hidden > 0 && shown.length > 0) h += span('d', ` +${hidden} more`)
     return `<div class="ln">${h}</div>`
@@ -293,31 +304,80 @@ Tasks needing more than ~3 edits or commands get a bar via ${Kt}: create it once
 
   function band(t, now) {
     const p = planAt(t)
-    if (!p) return ''
     W.live.isTurnLive = t < TURN_END
+    return p ? bandFrom([p], now) : ''
+  }
+
+  // The bars above the prompt as bars.tsx lays them out: glyph, title, track, percent.
+  function bandFrom(list, now) {
     const rest = 13
-    const fit = Math.min(Math.max(4, Math.min(Math.round(cols * 0.28), len(p.title))), cols - rest - 12)
+    const fit = Math.min(Math.max(4, Math.min(Math.round(cols * 0.28), Math.max(...list.map(p => len(p.title))))), cols - rest - 12)
     const titleW = fit >= 4 ? fit : 0
     const trackW = Math.max(4, Math.min(512, cols - titleW - rest + (titleW > 0 ? 0 : 1)))
-    const w = W.where(p)
-    const pct = W.percent(p, w)
-    const title = [...p.title].slice(0, titleW).join('').padEnd(titleW, ' ')
-    const glyph = `<span style="color:${W.STATE_COLOR[p.state]}">${W.STATE_GLYPH[p.state]}</span>`
-    return `<div class="ln">${glyph} ${esc(title)} ${cellsHTML(W.barCells(p, trackW, now))} ${span('d', String(pct).padStart(3, ' ') + '%')}</div>`
+    return list.map(p => {
+      const pct = W.percent(p, W.where(p))
+      const title = [...p.title].slice(0, titleW).join('').padEnd(titleW, ' ')
+      const glyph = `<span style="color:${W.STATE_COLOR[p.state]}">${W.STATE_GLYPH[p.state]}</span>`
+      return `<div class="ln">${glyph} ${esc(title)} ${cellsHTML(W.barCells(p, trackW, now))} ${span('d', String(pct).padStart(3, ' ') + '%')}</div>`
+    }).join('')
   }
 
+  // ---------- #shot: one still frame for the README screenshot ----------
+  const turnLine = (summary, ctx, h5, d7) => {
+    const n = (v, mark, text) => v >= mark[1] ? span('rd', text) : v >= mark[0] ? span('o', text) : span('d', text)
+    return span('d', '● watt: ' + summary) + span('d', ' · ') + n(ctx, [25, 35], `ctx ${ctx.toFixed(1)}%`) +
+      span('d', ' · ') + n(h5, [60, 80], `5h ${h5}%`) + span('d', ' & ') + n(d7, [60, 80], `7d ${d7}%`)
+  }
+  const stepsOf = (stages, active) => {
+    let i = 0
+    return stages.map(([name, titles]) => ({ name, steps: titles.map(title => {
+      const status = i < active ? 'done' : i === active ? 'active' : 'pending'
+      i += 1
+      return { title, status, substeps: [] }
+    }) }))
+  }
+  function renderShot() {
+    const now = 12_000
+    W.live.isTurnLive = false
+    const lines = [
+      `<span class="d">&gt;</span> Move the session store to Redis and update the docs`,
+      '',
+      `${span('g', '●')} <b>Read</b>(src/session/store.ts)${span('d', ' took 0.3s')}`,
+      span('d', '  ⎿  Read 318 lines'),
+      `${span('g', '●')} <b>Edit</b>(src/session/store.ts)${span('d', ' took 0.1s')}`,
+      span('d', '  ⎿  Updated with 41 additions and 17 removals'),
+      `${span('g', '●')} <b>Bash</b>(npm test -- session)${span('d', ' took 4.8s')}`,
+      span('d', '  ⎿  58 passed, 0 failed'),
+      '',
+      `${span('g', '●')} The session store now lives in Redis and all 58 session tests pass.`,
+      `  The docs agent is still updating the API pages.`,
+      '',
+      span('d', '✻ Worked for 5m 12s'),
+      ' ',
+      turnLine('15 tools 7.4s, model 290.8s, cache 98%', 20.8, 52, 78),
+    ]
+    $('tx').innerHTML = lines.map(l => `<div class="ln">${l || ' '}</div>`).join('')
+    $('agents').innerHTML = agentRowFrom([
+      { description: 'Update API docs', model: 'sonnet 5.5', state: 'running', ratio: 0.38, ms: 108_000 },
+      { description: 'Search old callers', model: 'haiku 5.5', state: 'done', ratio: 0.2, ms: 34_000 },
+    ], now, true)
+    $('band').innerHTML = bandFrom([
+      { id: 'redis', title: 'Move store to Redis', kind: 'plan', state: 'done', note: null, startedAt: 0, endedAt: 300_000,
+        stages: stepsOf([['Read', ['Map the store', 'List callers']], ['Move', ['Add Redis client', 'Swap the store']], ['Test', ['Run the suite']]], 5) },
+      { id: 'docs', title: 'Update the docs', kind: 'plan', state: 'running', note: null, startedAt: 0, endedAt: null,
+        stages: stepsOf([['Write', ['Draft API page', 'Update examples']], ['Check', ['Fix broken links', 'Review wording', 'Build the site']]], 2) },
+    ], now)
+    $('prompt').innerHTML = promptBox()
+  }
+
+  // the prompt box as a CSS border: box-drawing glyphs come from fallback fonts whose widths differ
   function promptBox() {
-    const inner = cols - 2
-    const text = ' > '
-    return [
-      `<div class="ln" style="margin-top:18px">${span('box', '╭' + '─'.repeat(inner) + '╮')}</div>`,
-      `<div class="ln">${span('box', '│')}${text}${' '.repeat(inner - text.length)}${span('box', '│')}</div>`,
-      `<div class="ln">${span('box', '╰' + '─'.repeat(inner) + '╯')}</div>`,
-      `<div class="ln">${span('d', '  ? for shortcuts')}</div>`,
-    ].join('')
+    return `<div class="pbox" style="width:${cols}ch">${span('d', '>')}</div>` +
+      `<div class="ln">${span('d', '  ? for shortcuts')}</div>`
   }
 
-  function render(t) {
+
+  let render = function (t) {
     const now = t * 1000
     const lines = transcript(t)
     const tx = lines.map(l => `<div class="ln">${l || ' '}</div>`).join('')
@@ -400,6 +460,13 @@ Tasks needing more than ~3 edits or commands get a bar via ${Kt}: create it once
     requestAnimationFrame(tick)
   }
 
+  const isShot = location.hash === '#shot'
+  if (isShot) {
+    playing = false
+    render = renderShot
+    termMode = 'dark'
+    document.body.classList.add('shot')
+  }
   applyTheme()
   measure()
   addEventListener('resize', () => { measure(); render(t) })

@@ -7,6 +7,8 @@ apollon이 만든 Claude Code mod 모음입니다. 각 mod는 Claude Code 인터
 
 **[라이브 데모](https://ytsnipers.github.io/watt-mods/)**: watt 자체 그리기 코드로 한 턴을 재생합니다.
 
+![Claude Code 터미널의 watt: 도구 시간, 턴 요약 줄, 에이전트 칩, 진행 바](docs/screenshot.png)
+
 | Mod | 기능 |
 | --- | --- |
 | [watt](plugins/watt/README.ko.md) | Claude Code가 보여 주지 않는 정보를 표시합니다. 각 도구 호출에 걸린 시간, 턴마다의 context와 5시간/7일 사용량, 실행 중인 서브에이전트별 상태 칩, 프롬프트 위의 실시간 진행 바. 작업이 끝나거나 실패하거나 사용자의 답을 기다릴 때 부드러운 소리가 납니다. 또한 여러 단계로 된 작업에서는 Claude에게 진행 바를 유지하도록 요청합니다. 자세한 내용은 [Claude 동작에 미치는 영향](plugins/watt/README.ko.md#claude-동작에-미치는-영향)을 참고하세요. |

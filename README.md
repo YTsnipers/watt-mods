@@ -7,6 +7,8 @@ some cases how Claude works.
 
 **[Live demo](https://ytsnipers.github.io/watt-mods/)**: a replay of one turn with watt, drawn by watt's own rendering code.
 
+![watt in a Claude Code terminal: tool times, the turn line, agent chips and progress bars](docs/screenshot.png)
+
 | Mod | What it does |
 | --- | --- |
 | [watt](plugins/watt) | Shows what Claude Code leaves hidden: how long each tool call took, context and five-hour/seven-day usage after each turn, a status chip per running subagent, and live progress bars above the prompt, with soft sounds when work ends, fails or waits for you. It also asks Claude to keep a progress bar for multi-step work; see [what it changes](plugins/watt#what-it-changes-in-claudes-behaviour). |

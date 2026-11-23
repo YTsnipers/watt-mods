@@ -7,6 +7,8 @@ Claude 的工作方式。
 
 **[線上 demo](https://ytsnipers.github.io/watt-mods/)**：用 watt 自己的繪圖程式重播一個回合。
 
+![watt 在 Claude Code 終端機中：工具耗時、回合摘要行、子代理標籤與進度條](docs/screenshot.png)
+
 | Mod | 功能 |
 | --- | --- |
 | [watt](plugins/watt/README.zh-TW.md) | 顯示 Claude Code 沒告訴你的資訊：每個工具呼叫花了多久、每回合結束後的 context 與五小時／七天用量、每個執行中子代理的狀態標籤，以及提示列上方的即時進度條。工作結束、失敗或等你回覆時會播放輕柔的提示音。它也會要求 Claude 在多步驟工作時維護進度條，詳見[對 Claude 行為的改變](plugins/watt/README.zh-TW.md#對-claude-行為的改變)。 |

@@ -7,6 +7,8 @@ apollon による Claude Code の mod 集です。各 mod は Claude Code のイ
 
 **[ライブデモ](https://ytsnipers.github.io/watt-mods/)**：watt 自身の描画コードで 1 ターンを再生します。
 
+![Claude Code のターミナルで動く watt：ツールの所要時間、ターン行、エージェントチップ、進捗バー](docs/screenshot.png)
+
 | Mod | 機能 |
 | --- | --- |
 | [watt](plugins/watt/README.ja.md) | Claude Code が表示しない情報を見せます。各ツール呼び出しにかかった時間、ターンごとの context と 5 時間／7 日間の使用量、実行中のサブエージェントごとのステータスチップ、プロンプト上部のリアルタイム進捗バー。作業の終了・失敗・あなたの返答待ちのときには控えめな音が鳴ります。また、複数ステップの作業では進捗バーを保つよう Claude に求めます。詳しくは[Claude の動作への影響](plugins/watt/README.ja.md#claude-の動作への影響)を参照してください。 |

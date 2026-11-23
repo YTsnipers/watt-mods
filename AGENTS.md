@@ -62,5 +62,6 @@ npx -p typescript tsc -p . --noEmit
   newer build raises it there and in the Requirements section of all seven READMEs.
 - `docs/index.html` is the GitHub Pages demo, built from `docs/demo/template.html` and watt's own `raster.ts`, `track.ts`
   and `plan.ts`: after changing any of them, run `docs/demo/build.sh` and commit the rebuilt page.
+  `docs/screenshot.png` (in every README) is `docs/index.html#shot` captured at 2x; retake it when the drawing changes.
 - Each `README.md` has translations beside it (`README.zh-TW.md`, `.zh-CN`, `.ja`, `.ko`, `.fr`, `.es`), each linking all seven on
   its third line: a change to one README is made to all seven in the same commit.

@@ -7,6 +7,8 @@ está haciendo cada subagente. watt dibuja todo eso en la terminal, junto al pro
 
 **[Demo en vivo](https://ytsnipers.github.io/watt-mods/)**: un turno reproducido con watt, dibujado por su propio código de renderizado.
 
+![watt en una terminal de Claude Code: tiempos de herramientas, línea del turno, chips de agentes y barras de progreso](../../docs/screenshot.png)
+
 - **Tiempo de cada llamada**: la fila de cada llamada a herramienta terminada acaba con lo que tardó, p. ej. `took 1.2s`.
 - **Línea del turno**: bajo la línea de duración de un turno principal, el contexto usado (frente a la ventana del propio
   modelo) y el uso de cinco horas y siete días, en naranja y luego en rojo al pasar sus umbrales.

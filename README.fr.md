@@ -7,6 +7,8 @@ prompt et, dans certains cas, la façon dont Claude travaille.
 
 **[Démo en direct](https://ytsnipers.github.io/watt-mods/)** : un tour rejoué avec watt, dessiné par son propre code de rendu.
 
+![watt dans un terminal Claude Code : durées des outils, ligne de tour, puces d'agents et barres de progression](docs/screenshot.png)
+
 | Mod | Ce qu'il fait |
 | --- | --- |
 | [watt](plugins/watt/README.fr.md) | Montre ce que Claude Code laisse caché : la durée de chaque appel d'outil, le contexte et l'usage sur cinq heures et sept jours après chaque tour, une puce d'état par sous-agent en cours et des barres de progression en direct au-dessus du prompt, avec des sons discrets quand le travail se termine, échoue ou vous attend. Il demande aussi à Claude de tenir une barre de progression pour le travail en plusieurs étapes ; voir [ce qu'il change dans le comportement de Claude](plugins/watt/README.fr.md#ce-quil-change-dans-le-comportement-de-claude). |
