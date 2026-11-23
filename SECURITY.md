@@ -20,6 +20,7 @@ it does is listed by `claude plugin validate plugins/watt`; this is that list in
 | Session state | `types/index.d.ts` | `$.state` keys under `watt.*`: chips, tool durations, turn stats, settings, bars. |
 | Prompt changes | `hooks/bars.tsx`, `hooks/register.tsx` | Adds one system prompt section (the progress bar rules) to the main conversation, and short notes after tool results or prompts (a bar to update, a waiting bar). |
 | Tool gating | `hooks/bars.tsx` | Refuses the main conversation's fourth file edit once when multi-step work has no progress bar, telling Claude to create one. Subagents are never gated. |
+| Turn end | `hooks/bars.tsx` | Sends the main conversation back once (a Stop hook `block`) when a turn did work and left a bar open without asking the person, so Claude updates it. A question or background work lets the turn end. |
 | Registered tool | `hooks/bars.tsx` | `plan_progress`: draws bars; it reads and writes nothing outside the mod's own state. |
 | Sounds | `sounds/*.wav` | Played through `$.audio.play` when work ends, fails or waits. |
 

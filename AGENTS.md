@@ -37,6 +37,11 @@ code almost never calls `$.ui.invalidate`.
 
 ## Verify a change
 
+`tsc` needs the engine types in `plugins/watt/.claude-plugin/types/`, which are git-ignored and written only when
+Claude Code loads the mod. On a fresh clone, add the repository as a marketplace and install watt first
+(`/plugin marketplace add <path to this clone>`, then `/plugin install watt@watt-mods`); `validate` and `test` run
+without them.
+
 ```sh
 cd plugins/watt
 claude plugin validate .   # what the module hooks, calls and writes; refusals

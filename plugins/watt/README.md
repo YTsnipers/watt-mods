@@ -26,7 +26,7 @@ what each subagent is doing. watt draws all of that in the terminal, next to the
 ```
 
 ```
-/plugin uninstall watt@my-mods
+/plugin uninstall watt@watt-mods
 ```
 
 ## What it changes in Claude's behaviour
@@ -39,6 +39,9 @@ watt does more than draw. Before installing, know that it:
   NotebookEdit) with no progress bar, that edit is refused once and Claude is told to create a bar first. Shell
   commands and subagents are never refused.
 - **Adds short reminders** after tool results when an open bar has not been updated for several edits.
+- **Sends Claude back once at the end of a turn** that did work and left a bar open without asking you anything:
+  Claude gets one more round to update the bar, which costs that round's tokens. A turn that ends with a question
+  marks the bar as waiting on you instead, and a turn waiting on background work is let through.
 - **Writes one local file**: `~/.cache/claude-usage/usage-<hash>.json` with the usage percentages, for the
   [CC Switch](https://github.com/farion1231/cc-switch) app to show. Nothing is sent over the network.
 
@@ -63,7 +66,7 @@ The full list of what watt can touch is in [SECURITY.md](../../SECURITY.md).
   `~/.claude/settings.json`, then run `/reload-plugins`:
 
   ```json
-  "prependPlugins": ["watt@my-mods"]
+  "prependPlugins": ["watt@watt-mods"]
   ```
 
 ## Develop
