@@ -155,13 +155,7 @@ const tickingRow = (on: On, read: () => Row | Row[]) => {
   const played: string[] = []
   const periods: Array<() => void> = []
 
-  // A tick waits for the pass it starts to read the agents, then for the write and sounds after that read.
-  let listed: (() => void) | undefined
-  on('agent.list', () => {
-    listed?.()
-
-    return { value: [read()].flat().map(r => ({ ...agent(r.status, r.id), taskStatus: r.taskStatus })) as never }
-  })
+  on('agent.list', () => ({ value: [read()].flat().map(r => ({ ...agent(r.status, r.id), taskStatus: r.taskStatus })) as never }))
   on('clock.now', () => ({ value: 1_005_000 }))
   // The 2s after a SubagentStop never ends here: the stopped agent stays stopped.
   on('clock.after', () => new Promise(() => {}))
@@ -187,6 +181,19 @@ const tickingRow = (on: On, read: () => Row | Row[]) => {
 
     return <Text>engine row</Text>
   })
+  // A pass ends, while a chip shows, by bumping the frame count: a tick waits for that.
+  let framed: (() => void) | undefined
+  const frames = { count: 0 }
+  on('state.set', async (_, e, next) => {
+    const out = await next(e)
+
+    if (e.key === 'agentFrame') {
+      frames.count += 1
+      framed?.()
+    }
+
+    return out
+  })
 
   // The timer asks for its next period on its own time: a tick first waits for one to be asked.
   const tick = async (): Promise<void> => {
@@ -197,18 +204,14 @@ const tickingRow = (on: On, read: () => Row | Row[]) => {
     }
 
     const pass = new Promise<void>(resolve => {
-      listed = resolve
+      framed = resolve
     })
 
     periods.shift()?.()
     await pass
-    listed = undefined
-    // the write and the sounds follow the read through the host: give them a moment (the test runtime has timers, its
-    // types do not)
-    await new Promise(resolve => (globalThis as unknown as { setTimeout: (f: () => void, ms: number) => void }).setTimeout(() => resolve(undefined), 20))
   }
 
-  return { played, tick }
+  return { played, tick, frames }
 }
 
 const chipText = async ($: Engine, status: Status): Promise<string> => {
@@ -284,30 +287,52 @@ test('agents that ran together end with the error sound when one failed, even th
   expect(played).toEqual(['sounds/error.wav'])
 })
 
-test('a running chip moves by blitted frames: the tick asks no redraw of the transcript', async ($, on) => {
-  const { tick } = tickingRow(on, () => ({ status: 'running', taskStatus: 'running' }))
+test('a frame redraws the agent row alone: no invalidate, the frame count goes up', async ($, on) => {
+  const { tick, frames } = tickingRow(on, () => ({ status: 'running', taskStatus: 'running' }))
   let invalidated = 0
-  const blitted: string[] = []
 
   on('ui.invalidate', () => {
     invalidated += 1
 
     return { value: undefined }
   })
-  on('ui.blit', (_, e) => {
-    blitted.push((e as { key: string }).key)
-
-    return { value: {} } as never
-  })
 
   await start($, 'a1')
-  const ui = await $.ui.mount(AGENT_ROW('running') as never)
-
   await tick()
-  await ui.unmount()
 
-  expect(blitted).toEqual(expect.arrayContaining(['summary', 'chip-a1']))
+  expect(frames.count).toBe(1)
   expect(invalidated).toBe(0)
+})
+
+test('a row too narrow for a chip shows the summary alone, inside the row', async ($, on) => {
+  tickingRow(on, () => ({ status: 'running', taskStatus: 'running' }))
+  await start($, 'a1')
+
+  const ui = await $.ui.mount({ ...AGENT_ROW('running'), props: { ...AGENT_ROW('running').props, columns: 30 } } as never)
+
+  expect(await ui.find({ key: 'chip-a1' })).toBeUndefined()
+  expect((await ui.find({ key: 'summary' }))?.props.columns).toBeLessThanOrEqual(24)
+  await ui.unmount()
+})
+
+test('a closed chip stays closed when its agent comes back and ends again', async ($, on) => {
+  let status: Status = 'running'
+  const { tick } = tickingRow(on, () => ({ status, taskStatus: status }))
+
+  await start($, 'a1')
+  status = 'killed'
+  await tick()
+
+  const ui = await $.ui.mount(AGENT_ROW('killed') as never)
+
+  await ui.press({ key: 'a1:close' })
+  await ui.unmount()
+  status = 'running'
+  await tick()
+  status = 'killed'
+  await tick()
+
+  expect(await chipText($, 'killed')).toBe('')
 })
 
 const DURATION = { plugin: 'watt', component: 'TurnDuration', requestId: 'turn-1' } as const

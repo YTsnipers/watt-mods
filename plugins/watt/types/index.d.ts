@@ -51,8 +51,9 @@ export type AgentChip = {
 
 // The agent row: its chips (running and finished, in the order first seen) and what the end and decision sounds go by.
 export type AgentRowState = {
-  // a closed chip leaves this list; an agent not running is never added back
   chips: AgentChip[]
+  // agents whose finished chip the person closed: ending again draws none, until it starts anew
+  closed: string[]
   // agents that waited at the last sync: the decision sound plays for one that starts to
   waiting: string[]
   // agents that ran since the row last had none running: the end sound speaks for these
@@ -64,8 +65,9 @@ export type AgentRowState = {
 declare module 'claude-code' {
   interface PluginState {
     'watt': {
-      agents: AgentRowState
-      // bumped each frame of the agent row where no Raster takes blitted frames (desktop, mobile)
+      // tagged: a reload whose code keeps another shape of the row starts it empty rather than misreading it
+      agents: Shaped<AgentRowState>
+      // bumped each frame while a chip shows: the agent row reads it to move
       agentFrame: number
       durations: Durations
       turnStats: TurnStat[]

@@ -1,11 +1,11 @@
 import { atom, read, update } from 'claude-code'
 import type { AgentInfo, EngineInterface, Register, Timer } from 'claude-code'
 
-import type { AgentChip, AgentRowState } from '../types'
+import type { AgentChip as Chip, AgentRowState } from '../types'
 
 import { play, startBars } from './bars'
 import { loadPrefs, prefs } from './prefs'
-import { chipCells, chipTint, hexOf, trackCells } from './raster'
+import { type ChipState, chipCells, chipTint, columnsOf, hexOf, trackCells } from './raster'
 import { startSettings } from './settings'
 import { loadThemeSetting, readTint, setThemeSetting } from './tint'
 
@@ -28,8 +28,7 @@ const CLOSE = ' × '
 // can be narrower.
 const minChip = (): number => (prefs.isModelShown ? 28 : 18)
 
-// Terminal cells a string takes: CJK letters take two.
-const cells = (text: string): number => [...text].reduce((n, c) => n + ((c.codePointAt(0) ?? 0) > 0x2e7f ? 2 : 1), 0)
+const cells = columnsOf
 
 // Cut `text` to `width` cells (ending in …), then centre it in exactly `width` cells.
 const fit = (text: string, width: number): string => {
@@ -85,22 +84,21 @@ const modelName = (m: string): string => {
   return r ? `${r[1]} ${r[2]}${r[3] ? `.${r[3]}` : ''}` : m
 }
 
-type Chip = AgentChip
-type ChipState = 'running' | 'waiting' | 'done' | 'failed'
-
 // The chips and the sound bookkeeping live in `$.state`: a reload of the mod keeps them, and the row, which reads them
 // while drawing, redraws on each write without an invalidate.
-const agents = atom({ plugin: 'watt', key: 'agents' } as const, { chips: [], waiting: [], batch: [], lastActive: 0 } as AgentRowState)
-// The frame count the row reads where its chips are plain text (no Raster to blit): bumped each frame there.
+const agents = atom({ plugin: 'watt', key: 'agents' } as const, { chips: [], closed: [], waiting: [], batch: [], lastActive: 0 } as AgentRowState, { shape: 'agents-2' })
+// Bumped each frame while a chip shows: the row reads it, so the times, the spinner and the glide move with a redraw of
+// the row alone.
 const agentFrame = atom({ plugin: 'watt', key: 'agentFrame' } as const, 0)
-
-// The settings window's choices: read while drawing so a changed choice redraws the row (settings.tsx writes them).
+// The settings window's choices (settings.tsx writes them), read while drawing so a changed choice redraws the row. A
+// reference is read in the file that names it, so it is named here too.
 const choices = { plugin: 'watt', key: 'choices' } as const
 
 // Ids whose SubagentStop fired in the last 2s: their status may still read `running` for a moment.
 const stopped = new Set<string>()
-let timer: Timer | undefined
-// How far the summary fill has got, in cells: it glides toward its target a frame at a time.
+// The frame clock, running while a chip shows.
+let frames: Timer | undefined
+// How far the summary fill has got, in cells: it glides toward its target a redraw at a time.
 let head = 0
 
 const isOkTask = (taskStatus: string): boolean => taskStatus !== 'failed' && taskStatus !== 'killed'
@@ -112,8 +110,8 @@ const stateOf = (c: Chip): ChipState => (c.endAt === undefined ? (c.isWaiting ? 
 
 type Sound = 'done' | 'error' | 'decision'
 
-// The row one sync later: running agents refreshed, the ones no longer running finished, the expired dropped, and the
-// sounds that change calls for. Pure, so `update` may run it again on a version miss.
+// The row one sync later: running agents refreshed, the ones no longer running finished (unless closed), the expired
+// dropped, and the sounds the change calls for. It writes nothing, so `update` may run it again on a version miss.
 function advance(prev: AgentRowState, all: readonly AgentInfo[], now: number): { state: AgentRowState; sounds: Sound[] } {
   const active = all.filter(a => a.hasRow && !stopped.has(a.id) && live(a.status))
   const activeIds = new Set(active.map(a => a.id))
@@ -134,23 +132,21 @@ function advance(prev: AgentRowState, all: readonly AgentInfo[], now: number): {
   const chips: Chip[] = []
 
   for (const c of byId.values()) {
-    const info = all.find(a => a.id === c.id)
-    let chip = c
-
-    if (!activeIds.has(c.id)) {
-      // A task can read killed or failed a moment after its stop: a finished chip follows it while the list still has it.
-      chip = c.endAt === undefined
-        ? { ...c, endAt: now, isOk: info === undefined || isOkTask(info.taskStatus) }
-        : info === undefined ? c : { ...c, isOk: isOkTask(info.taskStatus) }
-
-      if (!isKept(chip, now)) continue
+    if (activeIds.has(c.id)) {
+      chips.push(c)
+      continue
     }
 
-    chips.push(chip)
+    // A task can read killed or failed a moment after its stop: a finished chip follows it while the list still has it.
+    const info = all.find(a => a.id === c.id)
+    const isOk = info === undefined ? c.isOk : isOkTask(info.taskStatus)
+    const chip = { ...c, endAt: c.endAt ?? now, isOk }
+
+    if (!prev.closed.includes(c.id) && isKept(chip, now)) chips.push(chip)
   }
 
   const sounds: Sound[] = []
-  const batch = new Set([...prev.batch, ...active.map(a => a.id)])
+  const batch = new Set([...prev.batch, ...activeIds])
   const finished = chips.filter(c => c.endAt !== undefined)
 
   // The last running agent just ended: one soft sound, the error one if any that ran with it failed.
@@ -164,72 +160,9 @@ function advance(prev: AgentRowState, all: readonly AgentInfo[], now: number): {
   if (waiting.some(id => !prev.waiting.includes(id))) sounds.push('decision')
 
   return {
-    state: { chips, waiting, batch: active.length === 0 ? [] : [...batch], lastActive: active.length },
+    state: { chips, closed: prev.closed, waiting, batch: active.length === 0 ? [] : [...batch], lastActive: active.length },
     sounds,
   }
-}
-
-// What the agent row drew last, for the frames: where its Rasters are and what each shows. Null while no row is drawn.
-type Layout = {
-  requestId: string
-  isRaster: boolean
-  summaryW: number
-  label: string
-  target: number
-  isAllDone: boolean
-  shown: { chip: Chip; room: number }[]
-}
-let layout: Layout | null = null
-// what each Raster of the row was last sent: a frame sends only cells that changed
-let sent: { layout: Layout; cells: Map<string, string> } | null = null
-
-const chipArgs = (c: Chip, room: number, now: number, i: number) => ({
-  width: room,
-  name: c.description,
-  model: prefs.isModelShown ? modelName(c.model) : '',
-  time: clock((c.endAt ?? now) - c.startTime),
-  state: stateOf(c),
-  ratio: c.ratio,
-  frame: Math.floor(now / FRAME_MS) + i,
-  now,
-  isTwinkling: prefs.isTwinkling,
-})
-
-const glideHead = (target: number, isDone: boolean): number =>
-  (head = isDone || Math.abs(target - head) < 0.05 ? target : head + (target - head) * 0.35)
-
-// One frame of the row: its Rasters get their next cells without a redraw (the times, the pulse, the glide). Where the
-// chips are plain text, the frame count goes up instead and the row redraws from it.
-async function frame($: EngineInterface): Promise<void> {
-  const l = layout
-
-  if (l === null) return
-
-  if (!l.isRaster) {
-    await update($, agentFrame, n => n + 1)
-
-    return
-  }
-
-  const now = await $.clock.now()
-
-  if (sent?.layout !== l) sent = { layout: l, cells: new Map() }
-
-  const last = sent.cells
-  const out: [string, string, number][] = [
-    ['summary', trackCells({ width: l.summaryW, head: glideHead(l.target, l.isAllDone), label: l.label, isDone: l.isAllDone, now, isTwinkling: prefs.isTwinkling }), l.summaryW],
-    ...l.shown.map(({ chip, room }, i): [string, string, number] => [`chip-${chip.id}`, chipCells(chipArgs(chip, room, now, i)), room]),
-  ]
-
-  await Promise.all(
-    out
-      .filter(([key, cells]) => last.get(key) !== cells)
-      .map(([key, cells, columns]) => {
-        last.set(key, cells)
-
-        return $.ui.blit({ requestId: l.requestId, key, cells, columns, rows: 1 }).catch(() => undefined)
-      }),
-  )
 }
 
 // A sync in flight, and whether a call came while it ran: one more pass follows then, so two passes never overlap and
@@ -258,13 +191,13 @@ function sync($: EngineInterface): Promise<void> {
   return syncing
 }
 
-// The close button of a finished chip: the chip leaves the row, which redraws without it.
-function dismiss($: EngineInterface, id: string): void {
-  void update($, agents, s => ({ ...s, chips: s.chips.filter(c => c.id !== id) }))
+// The close button of a finished chip: it leaves the row, and the same agent ending again later draws no chip.
+function close($: EngineInterface, id: string): void {
+  void update($, agents, s => ({ ...s, chips: s.chips.filter(c => c.id !== id), closed: [...s.closed, id] }))
 }
 
-// Each tick reads the agents again (an agent stopped by TaskStop, or one that died, fires no SubagentStop, so the hooks
-// alone would miss its end), writes the row only when it changed, and sends the row's next frame.
+// Read the agents again (one stopped by TaskStop, or one that died, fires no SubagentStop, and a teammate no
+// SubagentStart), write the row only when it changed, and run the frame clock while a chip shows.
 async function syncOnce($: EngineInterface): Promise<void> {
   const now = await $.clock.now()
   const all = await $.agent.list()
@@ -278,14 +211,14 @@ async function syncOnce($: EngineInterface): Promise<void> {
   for (const s of sounds) play($, s)
 
   if (state.chips.length > 0) {
-    timer ??= $.clock.every(FRAME_MS, () => {
+    frames ??= $.clock.every(FRAME_MS, () => {
       void sync($)
-        .then(() => frame($))
+        .then(() => update($, agentFrame, n => n + 1))
         .catch(() => undefined)
     })
-  } else if (timer !== undefined) {
-    timer.cancel()
-    timer = undefined
+  } else {
+    frames?.cancel()
+    frames = undefined
   }
 }
 
@@ -296,8 +229,12 @@ export const register: Register = (on, options) => {
     await loadThemeSetting($)
     await startSettings($)
     await startBars($)
-    // a reload keeps the chips in `$.state` but not the clock that moves them: start it again
+    // A slow look at the agents while no chip shows: a teammate's row comes with no SubagentStart, and a reload keeps
+    // the chips in `$.state` but not the clock that moves them.
     await sync($)
+    $.clock.every(1000, () => {
+      if (frames === undefined) void sync($).catch(() => undefined)
+    })
 
     return next(e)
   })
@@ -316,6 +253,7 @@ export const register: Register = (on, options) => {
 
   on('classic.SubagentStart', async ($, e, next) => {
     stopped.delete(e.agent_id)
+    await update($, agents, s => ({ ...s, closed: s.closed.filter(id => id !== e.agent_id) }))
     const out = await next(e)
     await sync($)
 
@@ -337,8 +275,9 @@ export const register: Register = (on, options) => {
 
   // Fold every chip (running, then finished) into the first row that exists: one line, one chip each.
   on('ui.render', { component: 'AgentRow' }, async ($, e, next) => {
-    // reading these subscribes the row: a write of either redraws it, a frame does not
+    // Reading these subscribes the row: a sync that changed it, a frame and a changed choice redraw it.
     const { chips: all } = await read($, agents)
+    await read($, agentFrame)
     await read($, choices)
     const now = await $.clock.now()
     const active = all.filter(c => c.endAt === undefined)
@@ -347,8 +286,6 @@ export const register: Register = (on, options) => {
     const lead = chips.find(c => e.props.rowIds.includes(c.id))
 
     if (lead === undefined) {
-      if (chips.length === 0) layout = null
-
       return next(e)
     }
 
@@ -361,11 +298,11 @@ export const register: Register = (on, options) => {
     const t = $.ui.resolve(e)
     const { Box, Text, Button } = t
     const Raster = 'Raster' in t ? t.Raster : null
-    // plain-text chips move only on a redraw: they read the frame count, which each frame bumps
-    const f = Raster === null ? (await read($, agentFrame), Math.floor(now / FRAME_MS)) : 0
-    // Chips sit left, one cell apart. Each takes an equal share of the row but never more than half of it.
-    // The row's own pointer and margin sit outside `columns`; keep 6 cells spare so it never wraps.
-    const row = (e.props.columns ?? 80) - 6
+    const frame = Math.floor(now / FRAME_MS)
+    // Chips sit left, one cell apart. Each takes an equal share of the row but never more than half of it. The width is
+    // the row's as the surface measured it (a narrow window or a large font gives fewer columns), else the viewport's.
+    // The row's own pointer and margin sit outside it; keep 6 cells spare so it never wraps.
+    const row = Math.max(1, (e.props.columns ?? e.viewport?.columns ?? 80) - 6)
     // The summary pill leads the row, as plan-progress's bar does: state, count, percent; its fill is the share of agents done.
     // Raster cells hold one-column characters only, so its words are ASCII.
     const doneCount = done.length
@@ -374,11 +311,10 @@ export const register: Register = (on, options) => {
     const label = isAllDone
       ? `✓ Done ${doneCount}/${chips.length}  100%`
       : `● ${doneCount}/${chips.length}  ${String(pct)}%`
-    const summaryW = Math.max(24, label.length + 6)
+    const summaryW = Math.min(row, Math.max(24, cells(label) + 6))
     const target = (isAllDone ? 1 : doneCount / chips.length) * summaryW
 
-    // the frames glide the fill toward its target; all done, it is there at once
-    if (isAllDone) head = target
+    head = isAllDone || Math.abs(target - head) < 0.05 ? target : head + (target - head) * 0.35
 
     const [filledText, restText] = split(fit(label, summaryW), Math.round(target))
     const summary =
@@ -395,29 +331,19 @@ export const register: Register = (on, options) => {
           cells={trackCells({ width: summaryW, head, label, isDone: isAllDone, now, isTwinkling: prefs.isTwinkling })}
         />
       )
-    // Chips are at least minChip() wide; past what fits, the rest fold into one "+N more" (unfinished ones first).
+    // Chips are at least minChip() wide; past what fits, the rest fold into one "+N more" (unfinished ones first). Too
+    // narrow for one, the summary stands alone: its count says how many there are.
     const total = row - summaryW - 1
-    const fits = (room: number): number => Math.max(1, Math.floor((room + 1) / (minChip() + 1)))
-    const moreW = chips.length > fits(total) ? `+${chips.length} more`.length + 1 : 0
+    const fits = (room: number): number => Math.max(0, Math.floor((room + 1) / (minChip() + 1)))
+    const moreW = chips.length > fits(total) ? cells(` +${chips.length} more`) : 0
     const shown = chips.slice(0, fits(total - moreW))
     const hidden = chips.length - shown.length
-    const share = Math.floor((total - (hidden > 0 ? moreW : 0) - (shown.length - 1)) / shown.length)
-    const width = Math.max(8, Math.min(Math.floor(row / 2), share))
+    const share = Math.floor((total - (hidden > 0 ? moreW : 0) - (shown.length - 1)) / Math.max(1, shown.length))
+    const width = Math.min(Math.floor(row / 2), share)
+    const roomOf = (c: Chip): number => (c.endAt === undefined ? width : width - cells(CLOSE))
 
     // Pass `isHidden: false` down the chain: a finished agent's row may arrive hidden.
     await next({ ...e, props: { ...e.props, isHidden: false } })
-
-    // what the frames repaint until the next draw: each Raster's place and what it shows
-    const roomOf = (c: Chip): number => (c.endAt === undefined ? width : width - cells(CLOSE))
-    layout = {
-      requestId: e.requestId,
-      isRaster: Raster !== null,
-      summaryW,
-      label,
-      target,
-      isAllDone,
-      shown: shown.map(c => ({ chip: c, room: roomOf(c) })),
-    }
 
     return (
       <Box>
@@ -437,13 +363,23 @@ export const register: Register = (on, options) => {
                   key={`chip-${c.id}`}
                   columns={room}
                   rows={1}
-                  cells={chipCells(chipArgs(c, room, now, i))}
+                  cells={chipCells({
+                    width: room,
+                    name: c.description,
+                    model: prefs.isModelShown ? modelName(c.model) : '',
+                    time: clock((c.endAt ?? now) - c.startTime),
+                    state,
+                    ratio: c.ratio,
+                    frame: frame + i,
+                    now,
+                    isTwinkling: prefs.isTwinkling,
+                  })}
                 />
                 {c.endAt === undefined ? null : (
                   <Button
                     plain
                     key={`${c.id}:close`}
-                    onPress={() => dismiss($, c.id)}
+                    onPress={() => close($, c.id)}
                   >
                     <Text backgroundColor={hexOf(chipTint(state))}>{CLOSE}</Text>
                   </Button>
@@ -454,7 +390,7 @@ export const register: Register = (on, options) => {
 
           if (c.endAt === undefined) {
             // The fill follows the context window used: the purple part is what is spent, the dark part what is left.
-            const text = fit(`${SPIN[(f + i) % SPIN.length]} ${c.description}  ${clock(now - c.startTime)}`, width)
+            const text = fit(`${SPIN[(frame + i) % SPIN.length]} ${c.description}  ${clock(now - c.startTime)}`, width)
             const filled = c.ratio > 0 ? Math.max(1, Math.round(width * c.ratio)) : 0
             const [spent, left] = split(text, filled)
 
@@ -462,7 +398,7 @@ export const register: Register = (on, options) => {
               <Box key={c.id}>
                 {gap}
                 <Button plain key={c.id} onPress={() => void $.ui.view({ agentId: c.id })}>
-                  {spent === '' ? null : <Text backgroundColor={PULSE[(f + i) % PULSE.length]}>{spent}</Text>}
+                  {spent === '' ? null : <Text backgroundColor={PULSE[(frame + i) % PULSE.length]}>{spent}</Text>}
                   <Text backgroundColor={EMPTY}>{left}</Text>
                 </Button>
               </Box>
@@ -483,14 +419,14 @@ export const register: Register = (on, options) => {
               <Button
                 plain
                 key={`${c.id}:close`}
-                onPress={() => dismiss($, c.id)}
+                onPress={() => close($, c.id)}
               >
                 <Text backgroundColor={color}>{CLOSE}</Text>
               </Button>
             </Box>
           )
         })}
-        {hidden > 0 ? <Text dimColor> +{hidden} more</Text> : null}
+        {hidden > 0 && shown.length > 0 ? <Text dimColor> +{hidden} more</Text> : null}
       </Box>
     )
   })

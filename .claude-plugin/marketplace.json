@@ -1,12 +1,16 @@
 {
   "name": "my-mods",
-  "owner": { "name": "apollon" },
-  "metadata": { "description": "Personal Claude Code mods" },
+  "owner": {
+    "name": "apollon"
+  },
+  "metadata": {
+    "description": "Personal Claude Code mods"
+  },
   "plugins": [
     {
       "name": "watt",
       "source": "./plugins/watt",
-      "description": "Per-tool-call duration and per-turn tool count, model time, tool time"
+      "description": "Tool call times, a turn line with context and usage, a chip per running subagent, and live progress bars above the prompt."
     }
   ]
 }

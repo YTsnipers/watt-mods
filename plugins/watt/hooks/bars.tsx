@@ -46,6 +46,8 @@ import { GLIDE_MS, barCells, blitPlans, currentBand, glide, glideSettleAt, landG
 const plans = atom({ plugin: 'watt', key: 'plans' } as const, [])
 const isOpen = atom({ plugin: 'watt', key: 'isOpen' } as const, true)
 const tick = atom({ plugin: 'watt', key: 'tick' } as const, 0)
+// The settings window's choices (settings.tsx writes them): the band reads them so a changed choice redraws it.
+const choices = { plugin: 'watt', key: 'choices' } as const
 
 // ---------- sounds ----------
 
@@ -643,6 +645,7 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const list = await read($, plans)
+    await read($, choices)
     if (list.length === 0 || e.props.hasSurvey || !(await read($, isOpen))) {
       setBand(null)
       return next(e)
