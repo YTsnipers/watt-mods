@@ -96,8 +96,9 @@ const choices = { plugin: 'watt', key: 'choices' } as const
 
 // Ids whose SubagentStop fired in the last 2s: their status may still read `running` for a moment.
 const stopped = new Set<string>()
-// The frame clock, running while a chip shows.
+// The frame clock, running while a chip shows, and whether its last tick is still in flight.
 let frames: Timer | undefined
+let isTicking = false
 // How far the summary fill has got, in cells: it glides toward its target a redraw at a time.
 let head = 0
 
@@ -212,9 +213,16 @@ async function syncOnce($: EngineInterface): Promise<void> {
 
   if (state.chips.length > 0) {
     frames ??= $.clock.every(FRAME_MS, () => {
+      // A slow sync holds the ticks behind it: they skip rather than each bump the frame once it lands.
+      if (isTicking) return
+
+      isTicking = true
       void sync($)
         .then(() => update($, agentFrame, n => n + 1))
         .catch(() => undefined)
+        .finally(() => {
+          isTicking = false
+        })
     })
   } else {
     frames?.cancel()
