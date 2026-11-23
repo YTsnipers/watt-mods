@@ -1,4 +1,7 @@
-import type { EngineInterface, Register, Timer } from 'claude-code'
+import { atom, read, update } from 'claude-code'
+import type { AgentInfo, EngineInterface, Register, Timer } from 'claude-code'
+
+import type { AgentChip, AgentRowState } from '../types'
 
 import { play, startBars } from './bars'
 import { loadPrefs, prefs } from './prefs'
@@ -82,99 +85,151 @@ const modelName = (m: string): string => {
   return r ? `${r[1]} ${r[2]}${r[3] ? `.${r[3]}` : ''}` : m
 }
 
-type Chip = {
-  id: string
-  // The model it runs on, as `$.agent.list()` names it; empty when none is known.
-  model: string
-  // True while it waits on someone (a decision), not while it works.
-  isWaiting: boolean
-  // How much of its context window the agent has used, 0 to 1: the fill of a running chip.
-  ratio: number
-  description: string
-  startTime: number
-  // Set once the agent has finished: the chip turns green (or red) and stays for the chosen seconds or until closed.
-  endAt?: number
-  isOk: boolean
-}
+type Chip = AgentChip
+type ChipState = 'running' | 'waiting' | 'done' | 'failed'
 
-// Agents seen running, so a finished one still has its name and start time.
-const seen = new Map<string, Chip>()
-// Finished agents kept on screen.
-const finished = new Map<string, Chip>()
-// Finished agents the person closed: never drawn again.
-const dismissed = new Set<string>()
+// The chips and the sound bookkeeping live in `$.state`: a reload of the mod keeps them, and the row, which reads them
+// while drawing, redraws on each write without an invalidate.
+const agents = atom({ plugin: 'watt', key: 'agents' } as const, { chips: [], waiting: [], batch: [], lastActive: 0 } as AgentRowState)
+// The frame count the row reads where its chips are plain text (no Raster to blit): bumped each frame there.
+const agentFrame = atom({ plugin: 'watt', key: 'agentFrame' } as const, 0)
+
+// The settings window's choices: read while drawing so a changed choice redraws the row (settings.tsx writes them).
+const choices = { plugin: 'watt', key: 'choices' } as const
+
 // Ids whose SubagentStop fired in the last 2s: their status may still read `running` for a moment.
 const stopped = new Set<string>()
 let timer: Timer | undefined
-// Agents that waited at the last sync: a decision sound plays for one that starts to.
-let waiting = new Set<string>()
 // How far the summary fill has got, in cells: it glides toward its target a frame at a time.
 let head = 0
-// Running agents at the last sync, and the ids already announced: a sound plays when the last one ends.
-let lastActive = 0
-// Agents that ran since the row last had none running: the end sound speaks for these, not for a chip left from before.
-const batch = new Set<string>()
-
-async function running($: EngineInterface): Promise<Chip[]> {
-  const agents = (await $.agent.list()).filter(a => a.hasRow && !stopped.has(a.id) && live(a.status))
-
-  for (const a of agents) {
-    const ratio = a.contextWindowSize ? Math.min(1, a.tokenCount / a.contextWindowSize) : 0
-
-    seen.set(a.id, {
-      id: a.id,
-      ratio,
-      model: a.model ?? '',
-      isWaiting: a.status === 'waiting',
-      description: a.description,
-      startTime: a.startTime,
-      isOk: true,
-    })
-    // An agent that came back to work after a stop leaves the finished list.
-    finished.delete(a.id)
-  }
-
-  return agents.map(a => seen.get(a.id) as Chip)
-}
 
 const isOkTask = (taskStatus: string): boolean => taskStatus !== 'failed' && taskStatus !== 'killed'
 
 // a finished chip stays on screen for the chosen seconds after it ended
 const isKept = (c: Chip, now: number): boolean => now - (c.endAt ?? now) <= prefs.keepMs
 
-// Move every agent that was running and no longer is into `finished`; drop the expired and the closed.
-async function settle($: EngineInterface): Promise<Chip[]> {
-  const now = await $.clock.now()
-  const active = await running($)
+const stateOf = (c: Chip): ChipState => (c.endAt === undefined ? (c.isWaiting ? 'waiting' : 'running') : c.isOk ? 'done' : 'failed')
+
+type Sound = 'done' | 'error' | 'decision'
+
+// The row one sync later: running agents refreshed, the ones no longer running finished, the expired dropped, and the
+// sounds that change calls for. Pure, so `update` may run it again on a version miss.
+function advance(prev: AgentRowState, all: readonly AgentInfo[], now: number): { state: AgentRowState; sounds: Sound[] } {
+  const active = all.filter(a => a.hasRow && !stopped.has(a.id) && live(a.status))
   const activeIds = new Set(active.map(a => a.id))
-  const all = await $.agent.list()
+  const byId = new Map(prev.chips.map(c => [c.id, c]))
 
-  for (const [id, chip] of seen) {
-    if (activeIds.has(id) || finished.has(id) || dismissed.has(id)) {
-      continue
-    }
-
-    const info = all.find(a => a.id === id)
-    finished.set(id, { ...chip, endAt: now, isOk: info === undefined || isOkTask(info.taskStatus) })
+  for (const a of active) {
+    byId.set(a.id, {
+      id: a.id,
+      ratio: a.contextWindowSize ? Math.min(1, a.tokenCount / a.contextWindowSize) : 0,
+      model: a.model ?? '',
+      isWaiting: a.status === 'waiting',
+      description: a.description,
+      startTime: a.startTime,
+      isOk: true,
+    })
   }
 
-  // A task can read killed or failed a moment after its stop: a finished chip follows it while the list still has it.
-  for (const chip of finished.values()) {
-    const info = all.find(a => a.id === chip.id)
+  const chips: Chip[] = []
 
-    if (info !== undefined) {
-      chip.isOk = isOkTask(info.taskStatus)
+  for (const c of byId.values()) {
+    const info = all.find(a => a.id === c.id)
+    let chip = c
+
+    if (!activeIds.has(c.id)) {
+      // A task can read killed or failed a moment after its stop: a finished chip follows it while the list still has it.
+      chip = c.endAt === undefined
+        ? { ...c, endAt: now, isOk: info === undefined || isOkTask(info.taskStatus) }
+        : info === undefined ? c : { ...c, isOk: isOkTask(info.taskStatus) }
+
+      if (!isKept(chip, now)) continue
     }
+
+    chips.push(chip)
   }
 
-  for (const [id, chip] of finished) {
-    if (dismissed.has(id) || !isKept(chip, now)) {
-      finished.delete(id)
-      seen.delete(id)
-    }
+  const sounds: Sound[] = []
+  const batch = new Set([...prev.batch, ...active.map(a => a.id)])
+  const finished = chips.filter(c => c.endAt !== undefined)
+
+  // The last running agent just ended: one soft sound, the error one if any that ran with it failed.
+  if (prev.lastActive > 0 && active.length === 0 && finished.length > 0) {
+    sounds.push(finished.some(c => batch.has(c.id) && !c.isOk) ? 'error' : 'done')
   }
 
-  return active
+  // An agent that starts to wait on someone: the decision sound, once for each time it begins to.
+  const waiting = active.filter(a => a.status === 'waiting').map(a => a.id)
+
+  if (waiting.some(id => !prev.waiting.includes(id))) sounds.push('decision')
+
+  return {
+    state: { chips, waiting, batch: active.length === 0 ? [] : [...batch], lastActive: active.length },
+    sounds,
+  }
+}
+
+// What the agent row drew last, for the frames: where its Rasters are and what each shows. Null while no row is drawn.
+type Layout = {
+  requestId: string
+  isRaster: boolean
+  summaryW: number
+  label: string
+  target: number
+  isAllDone: boolean
+  shown: { chip: Chip; room: number }[]
+}
+let layout: Layout | null = null
+// what each Raster of the row was last sent: a frame sends only cells that changed
+let sent: { layout: Layout; cells: Map<string, string> } | null = null
+
+const chipArgs = (c: Chip, room: number, now: number, i: number) => ({
+  width: room,
+  name: c.description,
+  model: prefs.isModelShown ? modelName(c.model) : '',
+  time: clock((c.endAt ?? now) - c.startTime),
+  state: stateOf(c),
+  ratio: c.ratio,
+  frame: Math.floor(now / FRAME_MS) + i,
+  now,
+  isTwinkling: prefs.isTwinkling,
+})
+
+const glideHead = (target: number, isDone: boolean): number =>
+  (head = isDone || Math.abs(target - head) < 0.05 ? target : head + (target - head) * 0.35)
+
+// One frame of the row: its Rasters get their next cells without a redraw (the times, the pulse, the glide). Where the
+// chips are plain text, the frame count goes up instead and the row redraws from it.
+async function frame($: EngineInterface): Promise<void> {
+  const l = layout
+
+  if (l === null) return
+
+  if (!l.isRaster) {
+    await update($, agentFrame, n => n + 1)
+
+    return
+  }
+
+  const now = await $.clock.now()
+
+  if (sent?.layout !== l) sent = { layout: l, cells: new Map() }
+
+  const last = sent.cells
+  const out: [string, string, number][] = [
+    ['summary', trackCells({ width: l.summaryW, head: glideHead(l.target, l.isAllDone), label: l.label, isDone: l.isAllDone, now, isTwinkling: prefs.isTwinkling }), l.summaryW],
+    ...l.shown.map(({ chip, room }, i): [string, string, number] => [`chip-${chip.id}`, chipCells(chipArgs(chip, room, now, i)), room]),
+  ]
+
+  await Promise.all(
+    out
+      .filter(([key, cells]) => last.get(key) !== cells)
+      .map(([key, cells, columns]) => {
+        last.set(key, cells)
+
+        return $.ui.blit({ requestId: l.requestId, key, cells, columns, rows: 1 }).catch(() => undefined)
+      }),
+  )
 }
 
 // A sync in flight, and whether a call came while it ran: one more pass follows then, so two passes never overlap and
@@ -203,55 +258,35 @@ function sync($: EngineInterface): Promise<void> {
   return syncing
 }
 
-// The close button of a finished chip: it is never drawn again, and the row redraws without it.
+// The close button of a finished chip: the chip leaves the row, which redraws without it.
 function dismiss($: EngineInterface, id: string): void {
-  dismissed.add(id)
-  finished.delete(id)
-  seen.delete(id)
-  void sync($)
+  void update($, agents, s => ({ ...s, chips: s.chips.filter(c => c.id !== id) }))
 }
 
-// Redraw four times a second while any chip shows: the elapsed times and the animation move. Each tick also decides the
-// sounds: an agent stopped by TaskStop, or one that died, fires no SubagentStop, so the hooks alone would miss its end.
+// Each tick reads the agents again (an agent stopped by TaskStop, or one that died, fires no SubagentStop, so the hooks
+// alone would miss its end), writes the row only when it changed, and sends the row's next frame.
 async function syncOnce($: EngineInterface): Promise<void> {
-  const active = await settle($)
+  const now = await $.clock.now()
+  const all = await $.agent.list()
+  const prev = await read($, agents)
+  const { state, sounds } = advance(prev, all, now)
 
-  for (const c of active) {
-    batch.add(c.id)
+  if (JSON.stringify(state) !== JSON.stringify(prev)) {
+    await update($, agents, cur => advance(cur, all, now).state)
   }
 
-  // The last running agent just ended: one soft sound, the error one if any that ran with it failed.
-  if (lastActive > 0 && active.length === 0 && finished.size > 0) {
-    const name = [...finished.values()].some(c => batch.has(c.id) && !c.isOk) ? 'error' : 'done'
+  for (const s of sounds) play($, s)
 
-    play($, name)
-  }
-
-  if (active.length === 0) {
-    batch.clear()
-  }
-
-  lastActive = active.length
-
-  // An agent that starts to wait on someone: the decision sound, once for each time it begins to.
-  const nowWaiting = new Set(active.filter(c => c.isWaiting).map(c => c.id))
-
-  if ([...nowWaiting].some(id => !waiting.has(id))) {
-    play($, 'decision')
-  }
-
-  waiting = nowWaiting
-
-  if (active.length > 0 || finished.size > 0) {
+  if (state.chips.length > 0) {
     timer ??= $.clock.every(FRAME_MS, () => {
-      void sync($).catch(() => undefined)
+      void sync($)
+        .then(() => frame($))
+        .catch(() => undefined)
     })
   } else if (timer !== undefined) {
     timer.cancel()
     timer = undefined
   }
-
-  $.ui.invalidate('ui.render')
 }
 
 export const register: Register = (on, options) => {
@@ -261,6 +296,8 @@ export const register: Register = (on, options) => {
     await loadThemeSetting($)
     await startSettings($)
     await startBars($)
+    // a reload keeps the chips in `$.state` but not the clock that moves them: start it again
+    await sync($)
 
     return next(e)
   })
@@ -279,7 +316,6 @@ export const register: Register = (on, options) => {
 
   on('classic.SubagentStart', async ($, e, next) => {
     stopped.delete(e.agent_id)
-    dismissed.delete(e.agent_id)
     const out = await next(e)
     await sync($)
 
@@ -301,13 +337,18 @@ export const register: Register = (on, options) => {
 
   // Fold every chip (running, then finished) into the first row that exists: one line, one chip each.
   on('ui.render', { component: 'AgentRow' }, async ($, e, next) => {
-    const active = await running($)
+    // reading these subscribes the row: a write of either redraws it, a frame does not
+    const { chips: all } = await read($, agents)
+    await read($, choices)
     const now = await $.clock.now()
-    const done = [...finished.values()].filter(c => !dismissed.has(c.id) && isKept(c, now))
+    const active = all.filter(c => c.endAt === undefined)
+    const done = all.filter(c => c.endAt !== undefined && isKept(c, now))
     const chips = [...active, ...done]
     const lead = chips.find(c => e.props.rowIds.includes(c.id))
 
     if (lead === undefined) {
+      if (chips.length === 0) layout = null
+
       return next(e)
     }
 
@@ -320,7 +361,8 @@ export const register: Register = (on, options) => {
     const t = $.ui.resolve(e)
     const { Box, Text, Button } = t
     const Raster = 'Raster' in t ? t.Raster : null
-    const frame = Math.floor(now / FRAME_MS)
+    // plain-text chips move only on a redraw: they read the frame count, which each frame bumps
+    const f = Raster === null ? (await read($, agentFrame), Math.floor(now / FRAME_MS)) : 0
     // Chips sit left, one cell apart. Each takes an equal share of the row but never more than half of it.
     // The row's own pointer and margin sit outside `columns`; keep 6 cells spare so it never wraps.
     const row = (e.props.columns ?? 80) - 6
@@ -335,7 +377,8 @@ export const register: Register = (on, options) => {
     const summaryW = Math.max(24, label.length + 6)
     const target = (isAllDone ? 1 : doneCount / chips.length) * summaryW
 
-    head = isAllDone || Math.abs(target - head) < 0.05 ? target : head + (target - head) * 0.35
+    // the frames glide the fill toward its target; all done, it is there at once
+    if (isAllDone) head = target
 
     const [filledText, restText] = split(fit(label, summaryW), Math.round(target))
     const summary =
@@ -364,6 +407,18 @@ export const register: Register = (on, options) => {
     // Pass `isHidden: false` down the chain: a finished agent's row may arrive hidden.
     await next({ ...e, props: { ...e.props, isHidden: false } })
 
+    // what the frames repaint until the next draw: each Raster's place and what it shows
+    const roomOf = (c: Chip): number => (c.endAt === undefined ? width : width - cells(CLOSE))
+    layout = {
+      requestId: e.requestId,
+      isRaster: Raster !== null,
+      summaryW,
+      label,
+      target,
+      isAllDone,
+      shown: shown.map(c => ({ chip: c, room: roomOf(c) })),
+    }
+
     return (
       <Box>
         {summary}
@@ -372,8 +427,8 @@ export const register: Register = (on, options) => {
 
           // Raster chips, the plan-progress way. A Raster is not pressable, so a chip does not open its agent here.
           if (Raster !== null) {
-            const state = c.endAt === undefined ? (c.isWaiting ? 'waiting' : 'running') : c.isOk ? 'done' : 'failed'
-            const room = c.endAt === undefined ? width : width - cells(CLOSE)
+            const state = stateOf(c)
+            const room = roomOf(c)
 
             return (
               <Box key={c.id}>
@@ -382,17 +437,7 @@ export const register: Register = (on, options) => {
                   key={`chip-${c.id}`}
                   columns={room}
                   rows={1}
-                  cells={chipCells({
-                    width: room,
-                    name: c.description,
-                    model: prefs.isModelShown ? modelName(c.model) : '',
-                    time: clock((c.endAt ?? now) - c.startTime),
-                    state,
-                    ratio: c.ratio,
-                    frame: frame + i,
-                    now,
-                    isTwinkling: prefs.isTwinkling,
-                  })}
+                  cells={chipCells(chipArgs(c, room, now, i))}
                 />
                 {c.endAt === undefined ? null : (
                   <Button
@@ -409,7 +454,7 @@ export const register: Register = (on, options) => {
 
           if (c.endAt === undefined) {
             // The fill follows the context window used: the purple part is what is spent, the dark part what is left.
-            const text = fit(`${SPIN[(frame + i) % SPIN.length]} ${c.description}  ${clock(now - c.startTime)}`, width)
+            const text = fit(`${SPIN[(f + i) % SPIN.length]} ${c.description}  ${clock(now - c.startTime)}`, width)
             const filled = c.ratio > 0 ? Math.max(1, Math.round(width * c.ratio)) : 0
             const [spent, left] = split(text, filled)
 
@@ -417,7 +462,7 @@ export const register: Register = (on, options) => {
               <Box key={c.id}>
                 {gap}
                 <Button plain key={c.id} onPress={() => void $.ui.view({ agentId: c.id })}>
-                  {spent === '' ? null : <Text backgroundColor={PULSE[(frame + i) % PULSE.length]}>{spent}</Text>}
+                  {spent === '' ? null : <Text backgroundColor={PULSE[(f + i) % PULSE.length]}>{spent}</Text>}
                   <Text backgroundColor={EMPTY}>{left}</Text>
                 </Button>
               </Box>

@@ -33,9 +33,40 @@ export type Plan = {
   byAgent?: string
 }
 
+// A subagent's chip in the agent row. `endAt` is set once it finished: the chip turns green (or red) and stays for the
+// chosen seconds or until closed.
+export type AgentChip = {
+  id: string
+  // the model it runs on, as `$.agent.list()` names it; empty when none is known
+  model: string
+  // true while it waits on someone (a decision), not while it works
+  isWaiting: boolean
+  // how much of its context window the agent has used, 0 to 1: the fill of a running chip
+  ratio: number
+  description: string
+  startTime: number
+  endAt?: number
+  isOk: boolean
+}
+
+// The agent row: its chips (running and finished, in the order first seen) and what the end and decision sounds go by.
+export type AgentRowState = {
+  // a closed chip leaves this list; an agent not running is never added back
+  chips: AgentChip[]
+  // agents that waited at the last sync: the decision sound plays for one that starts to
+  waiting: string[]
+  // agents that ran since the row last had none running: the end sound speaks for these
+  batch: string[]
+  // running agents at the last sync: the end sound plays when it falls to 0
+  lastActive: number
+}
+
 declare module 'claude-code' {
   interface PluginState {
     'watt': {
+      agents: AgentRowState
+      // bumped each frame of the agent row where no Raster takes blitted frames (desktop, mobile)
+      agentFrame: number
       durations: Durations
       turnStats: TurnStat[]
       choices: Choices

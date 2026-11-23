@@ -1,3 +1,5 @@
+import type { Choices } from '../types'
+
 // What the settings window turns, as the plugin holds it now. The plugin's options (`/config`) are the stored side;
 // these are read from them when the plugin registers and changed from the window.
 export const KEEP_CHOICES = [10, 20, 60, 120]
@@ -18,3 +20,12 @@ export function loadPrefs(options: Record<string, unknown> | undefined): void {
   prefs.isAutoClose = options?.autoclose === true
   prefs.doneBarMs = Number.isFinite(doneSeconds) && doneSeconds > 0 ? doneSeconds * 1000 : 30_000
 }
+
+export const snapshot = (): Choices => ({
+  twinkle: prefs.isTwinkling,
+  sounds: prefs.isSoundOn,
+  showModel: prefs.isModelShown,
+  keepSeconds: Math.round(prefs.keepMs / 1000),
+  autoclose: prefs.isAutoClose,
+  doneBarSeconds: Math.round(prefs.doneBarMs / 1000),
+})

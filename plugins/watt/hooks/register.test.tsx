@@ -110,6 +110,8 @@ test('a finished agent turns green, stays, and has a close button', async ($, on
     return <Text>engine row</Text>
   })
 
+  // the row draws what the SubagentStart sync wrote, as in a session
+  await $.classic.SubagentStart({ agent_id: 'a1', agent_type: 'general-purpose' } as never)
   const running = await $.ui.mount(AGENT_ROW('running') as never)
 
   const chip = rasterText(((await running.find({ key: 'chip-a1' }))?.props.cells ?? '') as string)
@@ -153,7 +155,13 @@ const tickingRow = (on: On, read: () => Row | Row[]) => {
   const played: string[] = []
   const periods: Array<() => void> = []
 
-  on('agent.list', () => ({ value: [read()].flat().map(r => ({ ...agent(r.status, r.id), taskStatus: r.taskStatus })) as never }))
+  // A tick waits for the pass it starts to read the agents, then for the write and sounds after that read.
+  let listed: (() => void) | undefined
+  on('agent.list', () => {
+    listed?.()
+
+    return { value: [read()].flat().map(r => ({ ...agent(r.status, r.id), taskStatus: r.taskStatus })) as never }
+  })
   on('clock.now', () => ({ value: 1_005_000 }))
   // The 2s after a SubagentStop never ends here: the stopped agent stays stopped.
   on('clock.after', () => new Promise(() => {}))
@@ -174,13 +182,6 @@ const tickingRow = (on: On, read: () => Row | Row[]) => {
   on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: '' } as never }))
   on('classic.SubagentStart', () => ({}))
   on('classic.SubagentStop', () => ({}))
-  // A pass ends by asking for a redraw: a tick waits for that.
-  let drawn: (() => void) | undefined
-  on('ui.invalidate', () => {
-    drawn?.()
-
-    return { value: undefined }
-  })
   on('ui.render', ($, e) => {
     const { Text } = $.ui.resolve(e)
 
@@ -196,11 +197,15 @@ const tickingRow = (on: On, read: () => Row | Row[]) => {
     }
 
     const pass = new Promise<void>(resolve => {
-      drawn = resolve
+      listed = resolve
     })
 
     periods.shift()?.()
     await pass
+    listed = undefined
+    // the write and the sounds follow the read through the host: give them a moment (the test runtime has timers, its
+    // types do not)
+    await new Promise(resolve => (globalThis as unknown as { setTimeout: (f: () => void, ms: number) => void }).setTimeout(() => resolve(undefined), 20))
   }
 
   return { played, tick }
@@ -277,6 +282,32 @@ test('agents that ran together end with the error sound when one failed, even th
   await tick()
 
   expect(played).toEqual(['sounds/error.wav'])
+})
+
+test('a running chip moves by blitted frames: the tick asks no redraw of the transcript', async ($, on) => {
+  const { tick } = tickingRow(on, () => ({ status: 'running', taskStatus: 'running' }))
+  let invalidated = 0
+  const blitted: string[] = []
+
+  on('ui.invalidate', () => {
+    invalidated += 1
+
+    return { value: undefined }
+  })
+  on('ui.blit', (_, e) => {
+    blitted.push((e as { key: string }).key)
+
+    return { value: {} } as never
+  })
+
+  await start($, 'a1')
+  const ui = await $.ui.mount(AGENT_ROW('running') as never)
+
+  await tick()
+  await ui.unmount()
+
+  expect(blitted).toEqual(expect.arrayContaining(['summary', 'chip-a1']))
+  expect(invalidated).toBe(0)
 })
 
 const DURATION = { plugin: 'watt', component: 'TurnDuration', requestId: 'turn-1' } as const
@@ -472,12 +503,14 @@ test('past what fits, the chips fold into +N more', async ($, on) => {
   on('clock.now', () => ({ value: 1_005_000 }))
   on('clock.every', () => ({ value: { cancel: () => {} } as never }))
   on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: '' } as never }))
+  on('classic.SubagentStart', () => ({}))
   on('ui.render', ($, e) => {
     const { Text } = $.ui.resolve(e)
 
     return <Text>engine row</Text>
   })
 
+  await $.classic.SubagentStart({ agent_id: 'm0', agent_type: 'general-purpose' } as never)
   const ui = await $.ui.mount({
     ...AGENT_ROW('running'),
     requestId: 'm0',

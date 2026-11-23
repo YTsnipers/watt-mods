@@ -2,11 +2,12 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Choices } from '../types'
-import { DONE_CHOICES, KEEP_CHOICES, prefs } from './prefs'
+import { DONE_CHOICES, KEEP_CHOICES, prefs, snapshot } from './prefs'
 
 const PANE = 'watt-settings'
 
-// What the window shows; written whenever a choice changes so the window redraws.
+// The choices as the drawings read them: this window and the agent row. A drawing that reads them redraws when one
+// changes, so changing one needs no invalidate.
 const shown = atom({ plugin: 'watt', key: 'choices' } as const, {
   twinkle: true,
   sounds: true,
@@ -15,15 +16,6 @@ const shown = atom({ plugin: 'watt', key: 'choices' } as const, {
   autoclose: false,
   doneBarSeconds: 30,
 } as Choices)
-
-const snapshot = (): Choices => ({
-  twinkle: prefs.isTwinkling,
-  sounds: prefs.isSoundOn,
-  showModel: prefs.isModelShown,
-  keepSeconds: Math.round(prefs.keepMs / 1000),
-  autoclose: prefs.isAutoClose,
-  doneBarSeconds: Math.round(prefs.doneBarMs / 1000),
-})
 
 type Field = keyof Choices
 
@@ -37,8 +29,8 @@ async function choose($: EngineInterface, field: Field, value: boolean | number)
   if (field === 'doneBarSeconds') prefs.doneBarMs = Number(value) * 1000
 
   await $.config.set({ key: `watt.${field}`, value }).catch(() => undefined)
+  // the settings window and the agent row read `shown`: this write redraws them
   await update($, shown, () => snapshot())
-  $.ui.invalidate('ui.render')
 }
 
 // Run from the plugin's one `session.start` hook (a module may hook an event without a matcher only once).
