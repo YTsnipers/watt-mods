@@ -10,7 +10,13 @@ A Claude Code mod that shows how work is going without leaving the prompt.
 
 ## Use
 
-Install it from this marketplace, then open `/watt-settings` to turn the twinkle, the sounds or the model on chips on and off, and to set how long finished chips and bars stay. `/progress` hides or shows the bars, and `/progress-clear` removes them.
+Install it in Claude Code:
+
+```
+/plugin install watt --marketplace YTsnipers/watt-mods
+```
+
+Then open `/watt-settings` to turn the twinkle, the sounds or the model on chips on and off, and to set how long finished chips and bars stay. `/progress` hides or shows the bars, and `/progress-clear` removes them.
 
 After editing the source, run `/reload-plugins` in Claude Code to load the change.
 
