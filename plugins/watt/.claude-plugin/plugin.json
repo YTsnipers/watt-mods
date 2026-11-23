@@ -9,6 +9,9 @@
   "repository": "https://github.com/YTsnipers/watt-mods",
   "types": "./types/index.d.ts",
   "license": "MIT",
+  "engines": {
+    "claude-code": ">=2.1.295"
+  },
   "network": {
     "hosts": []
   },
