@@ -2,8 +2,16 @@
   "name": "watt",
   "version": "0.1.0",
   "description": "Shows how long each tool call took and a summary of each turn, a chip for each running subagent, and live plan progress bars above the prompt (the plan_progress tool, ported from plan-progress), with soft sounds when work ends, fails or waits for you.",
+  "author": {
+    "name": "apollon",
+    "url": "https://github.com/YTsnipers"
+  },
+  "repository": "https://github.com/YTsnipers/watt-mods",
   "types": "./types/index.d.ts",
   "license": "MIT",
+  "network": {
+    "hosts": []
+  },
   "userConfig": {
     "keepSeconds": {
       "type": "number",
