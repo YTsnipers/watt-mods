@@ -1,6 +1,6 @@
 # watt
 
-[English](README.md) | [繁體中文](README.zh-TW.md) | [简体中文](README.zh-CN.md) | 日本語 | [한국어](README.ko.md) | [Français](README.fr.md) | [Español](README.es.md)
+[English](README.md) | [繁體中文](README.zh-TW.md) | [简体中文](README.zh-CN.md) | 日本語 | [한국어](README.ko.md) | [Français](README.fr.md) | [Español](README.es.md) | [Svenska](README.sv.md)
 
 Claude Code は、各ツール呼び出しにかかった時間も、5 時間と 7 日間の使用量の残りも、各サブエージェントが何をしているかも
 表示しません。watt はそれらをすべて、ターミナルのプロンプトの横に描きます。

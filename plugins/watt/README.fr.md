@@ -1,6 +1,6 @@
 # watt
 
-[English](README.md) | [繁體中文](README.zh-TW.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | Français | [Español](README.es.md)
+[English](README.md) | [繁體中文](README.zh-TW.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | Français | [Español](README.es.md) | [Svenska](README.sv.md)
 
 Claude Code n'affiche ni la durée de chaque appel d'outil, ni ce qu'il reste de votre usage sur cinq heures et sept jours,
 ni ce que fait chaque sous-agent. watt dessine tout cela dans le terminal, à côté du prompt.

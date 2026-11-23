@@ -1,6 +1,6 @@
 # watt-mods
 
-[English](README.md) | [繁體中文](README.zh-TW.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | 한국어 | [Français](README.fr.md) | [Español](README.es.md)
+[English](README.md) | [繁體中文](README.zh-TW.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | 한국어 | [Français](README.fr.md) | [Español](README.es.md) | [Svenska](README.sv.md)
 
 apollon이 만든 Claude Code mod 모음입니다. 각 mod는 Claude Code 인터페이스 자체에 기능을 더합니다. 프롬프트 옆에 정보를
 보여 주는 것도 있고, Claude가 일하는 방식을 바꾸는 것도 있습니다.

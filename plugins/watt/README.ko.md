@@ -1,6 +1,6 @@
 # watt
 
-[English](README.md) | [繁體中文](README.zh-TW.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | 한국어 | [Français](README.fr.md) | [Español](README.es.md)
+[English](README.md) | [繁體中文](README.zh-TW.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | 한국어 | [Français](README.fr.md) | [Español](README.es.md) | [Svenska](README.sv.md)
 
 Claude Code는 각 도구 호출에 걸린 시간도, 5시간과 7일 사용량이 얼마나 남았는지도, 각 서브에이전트가 무엇을 하는지도
 보여 주지 않습니다. watt는 이 모든 것을 터미널의 프롬프트 옆에 그립니다.

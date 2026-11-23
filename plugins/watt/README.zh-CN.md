@@ -1,6 +1,6 @@
 # watt
 
-[English](README.md) | [繁體中文](README.zh-TW.md) | 简体中文 | [日本語](README.ja.md) | [한국어](README.ko.md) | [Français](README.fr.md) | [Español](README.es.md)
+[English](README.md) | [繁體中文](README.zh-TW.md) | 简体中文 | [日本語](README.ja.md) | [한국어](README.ko.md) | [Français](README.fr.md) | [Español](README.es.md) | [Svenska](README.sv.md)
 
 Claude Code 不会显示每个工具调用花了多久、五小时与七天用量还剩多少，也看不到每个子代理在做什么。watt 把这些都画在终端
 的输入框旁边。

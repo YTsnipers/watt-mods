@@ -1,6 +1,6 @@
 # watt-mods
 
-[English](README.md) | [繁體中文](README.zh-TW.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | Français | [Español](README.es.md)
+[English](README.md) | [繁體中文](README.zh-TW.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | Français | [Español](README.es.md) | [Svenska](README.sv.md)
 
 Des mods Claude Code par apollon. Chaque mod s'ajoute à l'interface même de Claude Code : ce qu'elle affiche à côté du
 prompt et, dans certains cas, la façon dont Claude travaille.

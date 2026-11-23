@@ -1,6 +1,6 @@
 # watt-mods
 
-[English](README.md) | [繁體中文](README.zh-TW.md) | [简体中文](README.zh-CN.md) | 日本語 | [한국어](README.ko.md) | [Français](README.fr.md) | [Español](README.es.md)
+[English](README.md) | [繁體中文](README.zh-TW.md) | [简体中文](README.zh-CN.md) | 日本語 | [한국어](README.ko.md) | [Français](README.fr.md) | [Español](README.es.md) | [Svenska](README.sv.md)
 
 apollon による Claude Code の mod 集です。各 mod は Claude Code のインターフェースそのものに機能を加えます。プロンプトの横に
 情報を表示するものもあれば、Claude の動き方を変えるものもあります。
