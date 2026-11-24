@@ -61,9 +61,8 @@ watt 能接触的完整清单见 [SECURITY.md](../../SECURITY.md)（英文）。
 - **会话里没有 `plan_progress` 工具**：杀毒软件的网页过滤（例如 AVG Web Shield）或代理拦截了 127.0.0.1，而这个工具
   要通过它连到会话。把 127.0.0.1 加入过滤例外，或设置 `NO_PROXY=127.0.0.1,localhost`，再重启 Claude Code。如果都不是，
   检查上面的版本要求。
-- **耗时行后面的数字不见了**：另一个 mod 画了这一行却没有往下传（例如
-  [prismantis](https://github.com/NahumLitvin/prismantis)，见
-  [issue #601](https://github.com/NahumLitvin/prismantis/issues/601)）。在 `~/.claude/settings.json` 加入下面这行让 watt
+- **耗时行后面的数字不见了**：另一个 mod 画了这一行却没有往下传（[prismantis](https://github.com/NahumLitvin/prismantis) 0.50.0 以前就会，见
+  [issue #601](https://github.com/NahumLitvin/prismantis/issues/601)；升级 prismantis 即可解决）。若是其他 mod，在 `~/.claude/settings.json` 加入下面这行让 watt
   先加载，再运行 `/reload-plugins`：
 
   ```json

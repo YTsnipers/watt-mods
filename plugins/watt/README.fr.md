@@ -71,8 +71,8 @@ La liste complète de ce à quoi watt peut accéder se trouve dans [SECURITY.md]
   bloque 127.0.0.1, par où l'outil rejoint la session. Ajoutez 127.0.0.1 aux exceptions du filtre, ou définissez
   `NO_PROXY=127.0.0.1,localhost`, puis redémarrez Claude Code. Si ce n'est pas cela, vérifiez la version requise ci-dessus.
 - **Les chiffres après la ligne de durée du tour manquent** : un autre mod a dessiné cette ligne sans la transmettre (le mod
-  [prismantis](https://github.com/NahumLitvin/prismantis), par exemple ;
-  [issue #601](https://github.com/NahumLitvin/prismantis/issues/601)). Chargez watt en premier en ajoutant ceci à
+  [prismantis](https://github.com/NahumLitvin/prismantis) le faisait avant la 0.50.0, voir
+  [issue #601](https://github.com/NahumLitvin/prismantis/issues/601) ; mettre prismantis à jour règle le problème). Pour tout autre mod, chargez watt en premier en ajoutant ceci à
   `~/.claude/settings.json`, puis lancez `/reload-plugins` :
 
   ```json

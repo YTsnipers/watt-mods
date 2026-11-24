@@ -67,9 +67,8 @@ watt が触れるものの完全な一覧は [SECURITY.md](../../SECURITY.md)（
   ツールがセッションに接続するための 127.0.0.1 をブロックしています。127.0.0.1 をフィルターの例外に追加するか、
   `NO_PROXY=127.0.0.1,localhost` を設定してから Claude Code を再起動してください。それでも解決しない場合は、上記の
   バージョン要件を確認してください。
-- **ターンの所要時間の行のあとに数字が出ない**：別の mod がその行を描いて、次に渡していません（たとえば
-  [prismantis](https://github.com/NahumLitvin/prismantis)。[issue #601](https://github.com/NahumLitvin/prismantis/issues/601)
-  を参照）。`~/.claude/settings.json` に次を追加して watt を先に読み込み、`/reload-plugins` を実行してください：
+- **ターンの所要時間の行のあとに数字が出ない**：別の mod がその行を描いて、次に渡していません（[prismantis](https://github.com/NahumLitvin/prismantis) は 0.50.0 より前がそうでした。
+  [issue #601](https://github.com/NahumLitvin/prismantis/issues/601) を参照。prismantis を更新すれば直ります）。ほかの mod の場合は、`~/.claude/settings.json` に次を追加して watt を先に読み込み、`/reload-plugins` を実行してください：
 
   ```json
   "prependPlugins": ["watt@watt-mods"]

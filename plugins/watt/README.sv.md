@@ -71,8 +71,8 @@ Hela listan över vad watt kan röra finns i [SECURITY.md](../../SECURITY.md) (p
   eller en proxy blockerar 127.0.0.1, där verktyget når sessionen. Lägg till 127.0.0.1 i filtrets undantag eller sätt
   `NO_PROXY=127.0.0.1,localhost` och starta sedan om Claude Code. Om det inte är det, kontrollera versionskravet ovan.
 - **Siffrorna efter omgångens tidsrad saknas**: en annan mod ritade den raden utan att skicka den vidare (modden
-  [prismantis](https://github.com/NahumLitvin/prismantis) gör till exempel det;
-  [issue #601](https://github.com/NahumLitvin/prismantis/issues/601)). Ladda watt först genom att lägga till detta i
+  [prismantis](https://github.com/NahumLitvin/prismantis) gjorde det före 0.50.0, se
+  [issue #601](https://github.com/NahumLitvin/prismantis/issues/601); uppdatera prismantis så löser det sig). För andra moddar: ladda watt först genom att lägga till detta i
   `~/.claude/settings.json` och kör sedan `/reload-plugins`:
 
   ```json

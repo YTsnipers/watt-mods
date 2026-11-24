@@ -65,9 +65,8 @@ watt가 접근하는 전체 목록은 [SECURITY.md](../../SECURITY.md)(영어)�
 - **세션에 `plan_progress` 도구가 없음**: 백신의 웹 필터(예: AVG Web Shield)나 프록시가 127.0.0.1을 막고 있습니다. 이
   도구는 127.0.0.1을 통해 세션에 연결됩니다. 127.0.0.1을 필터 예외에 추가하거나 `NO_PROXY=127.0.0.1,localhost`를
   설정한 뒤 Claude Code를 다시 시작하세요. 그래도 안 되면 위의 버전 요구 사항을 확인하세요.
-- **턴 소요 시간 줄 뒤에 숫자가 없음**: 다른 mod가 그 줄을 그리고 다음으로 넘기지 않았습니다(예:
-  [prismantis](https://github.com/NahumLitvin/prismantis),
-  [issue #601](https://github.com/NahumLitvin/prismantis/issues/601) 참고). `~/.claude/settings.json`에 다음을 추가해
+- **턴 소요 시간 줄 뒤에 숫자가 없음**: 다른 mod가 그 줄을 그리고 다음으로 넘기지 않았습니다([prismantis](https://github.com/NahumLitvin/prismantis)는 0.50.0 이전에 그랬습니다.
+  [issue #601](https://github.com/NahumLitvin/prismantis/issues/601) 참고, prismantis를 업데이트하면 해결됩니다). 다른 mod라면 `~/.claude/settings.json`에 다음을 추가해
   watt를 먼저 불러오고 `/reload-plugins`를 실행하세요:
 
   ```json
